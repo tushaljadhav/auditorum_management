@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking System</title>
+    <style>
+        /* Internal CSS */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            color: #555;
+        }
+        input[type="date"],
+        input[type="time"],
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #5cb85c;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #4cae4c;
+        }
+        .error {
+            color: red;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Book Your Slot</h2>
+        <form id="bookingForm">
+            <label for="date">Select Date:</label>
+            <input type="date" id="date" required>
+
+            <label for="time">Select Time:</label>
+            <input type="time" id="time" required>
+
+            <button type="submit">Check Availability</button>
+            <div class="error" id="errorMessage"></div>
+        </form>
+    </div>
+
+    <script>
+        // Internal JavaScript
+        document.getElementById('bookingForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const date = document.getElementById('date').value;
+            const time = document.getElementById('time').value;
+            const errorMessage = document.getElementById('errorMessage');
+
+            // AJAX request to check slot availability
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'check_availability.php', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.available) {
+                        window.location.href = 'next_page.html';
+                    } else {
+                        errorMessage.textContent = 'Slot not available. Please choose a different time.';
+                    }
+                }
+            };
+            xhr.send(`date=${date}&time=${time}`);
+        });
+    </script>
+</body>
+</html>

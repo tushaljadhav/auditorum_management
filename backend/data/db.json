@@ -1,0 +1,587 @@
+{
+  "users": [
+    {
+      "id": "user_1",
+      "username": "admin",
+      "password": "admin123",
+      "name": "System Admin"
+    },
+    {
+      "id": "user_1782665641018",
+      "username": "adminsss",
+      "password": "aa",
+      "name": "sss"
+    }
+  ],
+  "departments": [
+    {
+      "id": "dept_1",
+      "name": "IT"
+    },
+    {
+      "id": "dept_2",
+      "name": "CSE"
+    },
+    {
+      "id": "dept_3",
+      "name": "ECE"
+    },
+    {
+      "id": "dept_4",
+      "name": "Mechanical"
+    },
+    {
+      "id": "dept_1782814011224",
+      "name": "sss"
+    },
+    {
+      "id": "dept_1782814015009",
+      "name": "dd"
+    },
+    {
+      "id": "dept_1782814019725",
+      "name": "ff"
+    }
+  ],
+  "faculty": [
+    {
+      "id": "faculty_1",
+      "name": "Dr. Rajesh Kumar",
+      "email": "rajesh.kumar@example.com",
+      "mobile": "+91 9876543210",
+      "departmentId": "dept_1"
+    },
+    {
+      "id": "faculty_2",
+      "name": "Prof. Vikram Singh",
+      "email": "vikram.singh@example.com",
+      "mobile": "+91 9876543211",
+      "departmentId": "dept_1"
+    },
+    {
+      "id": "faculty_3",
+      "name": "Dr. Neha Sharma",
+      "email": "neha.sharma@example.com",
+      "mobile": "+91 9876543212",
+      "departmentId": "dept_2"
+    },
+    {
+      "id": "faculty_4",
+      "name": "Prof. Amit Yadav",
+      "email": "amit.yadav@example.com",
+      "mobile": "+91 9876543213",
+      "departmentId": "dept_2"
+    },
+    {
+      "id": "faculty_5",
+      "name": "Prof. Anil Kumar",
+      "email": "anil.kumar@example.com",
+      "mobile": "+91 9876543214",
+      "departmentId": "dept_3"
+    },
+    {
+      "id": "faculty_6",
+      "name": "Dr. Priya Gupta",
+      "email": "priya.gupta@example.com",
+      "mobile": "+91 9876543215",
+      "departmentId": "dept_3"
+    },
+    {
+      "id": "faculty_7",
+      "name": "Prof. Radhika Joshi",
+      "email": "radhika.joshi@example.com",
+      "mobile": "+91 9876543216",
+      "departmentId": "dept_4"
+    },
+    {
+      "id": "faculty_8",
+      "name": "Dr. Kiran Patel",
+      "email": "kiran.patel@example.com",
+      "mobile": "+91 9876543217",
+      "departmentId": "dept_4"
+    },
+    {
+      "id": "faculty_1782829955884",
+      "name": "DR. Tushal Jadhav",
+      "email": "tushaljadhav123@gmail.com",
+      "mobile": "+91 8591811441",
+      "departmentId": "dept_1"
+    },
+    {
+      "id": "faculty_1782830227341",
+      "name": "aaa",
+      "email": "aaaaaaaa@gmail.com",
+      "mobile": "+91 8591811444",
+      "departmentId": "dept_3"
+    },
+    {
+      "id": "faculty_1783430193601",
+      "name": "sahil arote",
+      "email": "sahil@gmail.com",
+      "mobile": "+91 3459762978",
+      "departmentId": "dept_4"
+    }
+  ],
+  "venues": [
+    {
+      "id": "venue_1",
+      "name": "Hall A",
+      "capacity": 150,
+      "location": "Block A, 2nd Floor"
+    },
+    {
+      "id": "venue_2",
+      "name": "Hall B",
+      "capacity": 250,
+      "location": "Block B, Ground Floor"
+    },
+    {
+      "id": "venue_3",
+      "name": "Hall C",
+      "capacity": 500,
+      "location": "Auditorium Complex"
+    },
+    {
+      "id": "venue_1782814192705",
+      "name": "class room 3.6",
+      "capacity": 150,
+      "location": "3rd floor main building"
+    },
+    {
+      "id": "venue_1782986567687",
+      "name": "myhome",
+      "capacity": 20,
+      "location": "first floor",
+      "address": "Jai Shankar Chowk New Mill Road and Halav Pool Road in Kurla West, Mumbai, Maharashtra (PIN: 400070)",
+      "latitude": 19.0208616,
+      "longitude": 72.828556,
+      "radius": 20,
+      "status": "Active"
+    },
+    {
+      "id": "venue_1783002653712",
+      "name": "librebry",
+      "capacity": 111,
+      "location": "first floor",
+      "address": "Kurla East, L Ward, Mumbai Zone 5, Mumbai, Mumbai Suburban District, Maharashtra, 400024, India",
+      "latitude": 19.0623025,
+      "longitude": 72.88748375,
+      "radius": 20,
+      "status": "Active"
+    },
+    {
+      "id": "venue_1783427608397",
+      "name": "library room 2",
+      "capacity": 4,
+      "location": "second floor ",
+      "address": "Shivshrushti, Kurla East, L Ward, Mumbai Zone 5, Mumbai, Mumbai Suburban District, Maharashtra, 400024, India",
+      "latitude": 19.062313813372523,
+      "longitude": 72.88732348052903,
+      "radius": 10,
+      "status": "Active"
+    }
+  ],
+  "bookings": [
+    {
+      "id": "booking_1782662715184",
+      "status": "Approved",
+      "eventName": "sasae",
+      "departmentId": "dept_3",
+      "facultyId": "faculty_6",
+      "venueId": "venue_2",
+      "eventDescription": "111",
+      "bookingDate": "2026-07-01",
+      "startTime": "00:24",
+      "endTime": "01:19",
+      "attendees": 111
+    },
+    {
+      "id": "booking_1782663149841",
+      "status": "Approved",
+      "eventName": "aa",
+      "departmentId": "dept_4",
+      "facultyId": "faculty_8",
+      "venueId": "venue_1",
+      "eventDescription": "aa",
+      "bookingDate": "2026-06-30",
+      "startTime": "02:42",
+      "endTime": "03:42",
+      "attendees": 1111
+    },
+    {
+      "id": "booking_1782829446710",
+      "status": "Approved",
+      "eventName": "aaaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1",
+      "venueId": "venue_2",
+      "eventDescription": "a",
+      "bookingDate": "2026-06-30",
+      "startTime": "19:54",
+      "endTime": "19:56",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1782829610023",
+      "status": "Rejected",
+      "eventName": "aaaaa",
+      "departmentId": "dept_4",
+      "facultyId": "faculty_8",
+      "venueId": "venue_1",
+      "eventDescription": "aaaa",
+      "bookingDate": "2026-07-01",
+      "startTime": "01:56",
+      "endTime": "05:56",
+      "attendees": 111
+    },
+    {
+      "id": "booking_1782829810182",
+      "status": "Approved",
+      "eventName": "aaaaaaaaaaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_2",
+      "venueId": "venue_3",
+      "eventDescription": "aaaaa",
+      "bookingDate": "2026-07-01",
+      "startTime": "01:01",
+      "endTime": "02:00",
+      "attendees": 1111
+    },
+    {
+      "id": "booking_1782830674309",
+      "status": "Approved",
+      "eventName": "qq",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_2",
+      "eventDescription": "aaaa",
+      "bookingDate": "2026-07-01",
+      "startTime": "11:18",
+      "endTime": "12:14",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1782831901442",
+      "status": "Approved",
+      "eventName": "hacketon",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1",
+      "eventDescription": "aaa",
+      "bookingDate": "2026-07-01",
+      "startTime": "01:34",
+      "endTime": "04:34",
+      "attendees": 110
+    },
+    {
+      "id": "booking_1782831986539",
+      "status": "Rejected",
+      "eventName": "aaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1",
+      "eventDescription": "aa",
+      "bookingDate": "2026-07-01",
+      "startTime": "01:41",
+      "endTime": "04:35",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1782900527757",
+      "status": "Approved",
+      "eventName": "aaa",
+      "departmentId": "dept_2",
+      "facultyId": "faculty_4",
+      "venueId": "venue_1",
+      "eventDescription": "aaa",
+      "bookingDate": "2026-07-23",
+      "startTime": "04:38",
+      "endTime": "20:38",
+      "attendees": 111
+    },
+    {
+      "id": "booking_1782901285444",
+      "status": "Approved",
+      "eventName": "ahahs",
+      "departmentId": "dept_3",
+      "facultyId": "faculty_6",
+      "venueId": "venue_1",
+      "eventDescription": "aaa",
+      "bookingDate": "2026-07-30",
+      "startTime": "09:49",
+      "endTime": "10:49",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1782901803497",
+      "status": "Approved",
+      "eventName": "aaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1782814192705",
+      "eventDescription": "aaa",
+      "bookingDate": "2026-07-01",
+      "startTime": "08:00",
+      "endTime": "20:00",
+      "attendees": 109
+    },
+    {
+      "id": "booking_1782902474368",
+      "status": "Approved",
+      "eventName": "aa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1",
+      "venueId": "venue_1",
+      "eventDescription": "aa",
+      "bookingDate": "2026-07-01",
+      "startTime": "05:13",
+      "endTime": "06:10",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1782903052296",
+      "status": "Approved",
+      "eventName": "aaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1",
+      "eventDescription": "sss",
+      "bookingDate": "2026-07-10",
+      "startTime": "08:00",
+      "endTime": "20:00",
+      "attendees": 11,
+      "attendanceStatus": "OPEN",
+      "attendanceWindowStart": "2026-07-02T10:24:47.488Z",
+      "attendanceWindowEnd": "2026-07-02T10:29:47.488Z"
+    },
+    {
+      "id": "booking_1782903537877",
+      "status": "Approved",
+      "eventName": "aa",
+      "departmentId": "dept_2",
+      "facultyId": "faculty_3",
+      "venueId": "venue_1",
+      "eventDescription": "aa",
+      "bookingDate": "2026-07-04",
+      "startTime": "17:28",
+      "endTime": "20:33",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1782981930945",
+      "status": "Rejected",
+      "eventName": "aaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1",
+      "eventDescription": "aaa",
+      "bookingDate": "2026-07-02",
+      "startTime": "10:00",
+      "endTime": "11:00",
+      "attendees": 10
+    },
+    {
+      "id": "booking_1782984552374",
+      "status": "Approved",
+      "eventName": "aaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1",
+      "eventDescription": "aaa",
+      "bookingDate": "2026-07-02",
+      "startTime": "10:00",
+      "endTime": "11:00",
+      "attendees": 111
+    },
+    {
+      "id": "booking_1782988222319",
+      "status": "Approved",
+      "attendanceStatus": "OPEN",
+      "attendanceWindowStart": "2026-07-02T10:30:51.662Z",
+      "attendanceWindowEnd": "2026-07-02T10:35:51.662Z",
+      "eventName": "aaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1782986567687",
+      "eventDescription": "asa",
+      "bookingDate": "2026-07-02",
+      "startTime": "11:00",
+      "endTime": "12:00",
+      "attendees": 111
+    },
+    {
+      "id": "booking_1782996251166",
+      "status": "Approved",
+      "attendanceStatus": "OPEN",
+      "attendanceWindowStart": "2026-07-02T12:45:21.681Z",
+      "attendanceWindowEnd": "2026-07-02T12:50:21.681Z",
+      "eventName": "sahil",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1",
+      "venueId": "venue_1782986567687",
+      "eventDescription": "jhsdjdhdshjsdjhdsjkdhdkhjds",
+      "bookingDate": "2026-07-03",
+      "startTime": "02:12",
+      "endTime": "12:50",
+      "attendees": 20
+    },
+    {
+      "id": "booking_1783002696229",
+      "status": "Approved",
+      "attendanceStatus": "OPEN",
+      "attendanceWindowStart": "2026-07-02T15:50:56.695Z",
+      "attendanceWindowEnd": "2026-07-02T16:05:56.695Z",
+      "eventName": "aaa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1783002653712",
+      "eventDescription": "aaaa",
+      "bookingDate": "2026-07-03",
+      "startTime": "11:00",
+      "endTime": "12:00",
+      "attendees": 109
+    },
+    {
+      "id": "booking_1783007531419",
+      "status": "Approved",
+      "attendanceStatus": "OPEN",
+      "attendanceWindowStart": "2026-07-02T15:59:09.800Z",
+      "attendanceWindowEnd": "2026-07-02T16:04:09.800Z",
+      "eventName": "aa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_2",
+      "venueId": "venue_1782986567687",
+      "eventDescription": "sada",
+      "bookingDate": "2026-07-02",
+      "startTime": "13:00",
+      "endTime": "14:00",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1783007706026",
+      "status": "Approved",
+      "attendanceStatus": "OPEN",
+      "attendanceWindowStart": "2026-07-02T15:55:34.066Z",
+      "attendanceWindowEnd": "2026-07-02T16:00:34.066Z",
+      "eventName": "aa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1783002653712",
+      "eventDescription": "aa",
+      "bookingDate": "2026-07-03",
+      "startTime": "13:00",
+      "endTime": "14:00",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1783093526743",
+      "status": "Approved",
+      "attendanceStatus": "CLOSED",
+      "attendanceWindowStart": null,
+      "attendanceWindowEnd": null,
+      "eventName": "jvusahuv",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1783002653712",
+      "eventDescription": "gfydf",
+      "bookingDate": "2026-07-03",
+      "startTime": "14:00",
+      "endTime": "15:00",
+      "attendees": 3434
+    },
+    {
+      "id": "booking_1783367031027",
+      "status": "Pending",
+      "attendanceStatus": "CLOSED",
+      "attendanceWindowStart": null,
+      "attendanceWindowEnd": null,
+      "eventName": "conexa",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1782829955884",
+      "venueId": "venue_1",
+      "eventDescription": "shkasdda",
+      "bookingDate": "2026-07-07",
+      "startTime": "11:00",
+      "endTime": "12:00",
+      "attendees": 11
+    },
+    {
+      "id": "booking_1783427692906",
+      "status": "Pending",
+      "attendanceStatus": "CLOSED",
+      "attendanceWindowStart": null,
+      "attendanceWindowEnd": null,
+      "eventName": "hja",
+      "departmentId": "dept_1",
+      "facultyId": "faculty_1",
+      "venueId": "venue_1",
+      "eventDescription": "adfadf",
+      "bookingDate": "2026-07-07",
+      "startTime": "11:00",
+      "endTime": "12:00",
+      "attendees": 111
+    }
+  ],
+  "attendance": [
+    {
+      "id": "att_1782988280769_w121x",
+      "checkInTime": "2026-07-02T10:31:20.769Z",
+      "bookingId": "booking_1782988222319",
+      "venueId": "venue_1782986567687",
+      "rollNumber": "it-12",
+      "studentName": "tuhsak kajhs",
+      "latitude": 19.0208616,
+      "longitude": 72.828556,
+      "distanceFromVenue": 0,
+      "status": "Present"
+    },
+    {
+      "id": "att_1782996349270_3vqxt",
+      "checkInTime": "2026-07-02T12:45:49.270Z",
+      "bookingId": "booking_1782996251166",
+      "venueId": "venue_1782986567687",
+      "rollNumber": "23543466",
+      "studentName": "saihkk",
+      "latitude": 19.0208616,
+      "longitude": 72.828556,
+      "distanceFromVenue": 0,
+      "status": "Present"
+    },
+    {
+      "id": "att_1783002986389_yf8e3",
+      "checkInTime": "2026-07-02T14:36:26.389Z",
+      "bookingId": "booking_1783002696229",
+      "venueId": "venue_1783002653712",
+      "rollNumber": "21",
+      "studentName": "aaa",
+      "latitude": 19.0623025,
+      "longitude": 72.88748375,
+      "distanceFromVenue": 0,
+      "status": "Present"
+    },
+    {
+      "id": "att_1783006250056_u7z9k",
+      "checkInTime": "2026-07-02T15:30:50.057Z",
+      "bookingId": "booking_1783002696229",
+      "venueId": "venue_1783002653712",
+      "rollNumber": "211",
+      "studentName": "aa",
+      "latitude": 19.062246,
+      "longitude": 72.8874475,
+      "distanceFromVenue": 7.35,
+      "status": "Present"
+    },
+    {
+      "id": "att_1783007780461_yu5q0",
+      "checkInTime": "2026-07-02T15:56:20.461Z",
+      "bookingId": "booking_1783007706026",
+      "venueId": "venue_1783002653712",
+      "rollNumber": "52",
+      "studentName": "ajohjas ad",
+      "latitude": 19.062331712050245,
+      "longitude": 72.88732383015754,
+      "distanceFromVenue": 17.12,
+      "status": "Present"
+    }
+  ]
+}
