@@ -956,6 +956,79 @@ export default function BookingPortal() {
                                 )}
                               </div>
 
+                              {/* Multi-Slot Visual Day Schedule Timeline Bar */}
+                              <div className="p-3 rounded-3 border bg-white mb-2" style={{ borderColor: '#E2E8F0' }}>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <span>🗓️ Interactive Visual Day Timeline (09:00 AM – 11:00 PM)</span>
+                                  <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 500 }}>Click any green slot to auto-fill time</span>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(14, 1fr)', gap: 4, overflowX: 'auto', paddingBottom: 4 }}>
+                                  {Array.from({ length: 14 }, (_, i) => {
+                                    const h = i + 9;
+                                    const startStr = `${h.toString().padStart(2, '0')}:00`;
+                                    const endStr = `${(h + 1).toString().padStart(2, '0')}:00`;
+                                    
+                                    const bookingMatch = dayBookings.find(b => {
+                                      const bStartH = parseInt((b.startTime || '0').split(':')[0]);
+                                      const bEndH = parseInt((b.endTime || '0').split(':')[0]);
+                                      return h >= bStartH && h < bEndH;
+                                    });
+
+                                    const isSelected = (() => {
+                                      if (!availForm.startTime || !availForm.endTime) return false;
+                                      const selStart = parseInt((availForm.startTime || '0').split(':')[0]);
+                                      const selEnd = parseInt((availForm.endTime || '0').split(':')[0]);
+                                      return h >= selStart && h < selEnd;
+                                    })();
+
+                                    let bg = '#F0FDF4', border = '#BBF7D0', color = '#15803D', statusText = 'Free Slot';
+
+                                    if (bookingMatch) {
+                                      bg = '#FEF2F2'; border = '#FCA5A5'; color = '#991B1B'; statusText = `Booked: ${bookingMatch.eventName}`;
+                                    } else if (isSelected) {
+                                      bg = '#2563EB'; border = '#1D4ED8'; color = '#FFFFFF'; statusText = 'Selected Slot';
+                                    }
+
+                                    return (
+                                      <button
+                                        key={h}
+                                        type="button"
+                                        disabled={!!bookingMatch}
+                                        onClick={() => {
+                                          setAvailForm(prev => ({ ...prev, startTime: startStr, endTime: endStr }));
+                                          Swal.fire({
+                                            toast: true,
+                                            position: 'top-end',
+                                            icon: 'success',
+                                            title: `Time set: ${startStr} - ${endStr}`,
+                                            showConfirmButton: false,
+                                            timer: 1200
+                                          });
+                                        }}
+                                        title={`${startStr} - ${endStr}: ${statusText}`}
+                                        style={{
+                                          padding: '8px 2px', borderRadius: 8, border: `1px solid ${border}`,
+                                          background: bg, color: color, fontSize: '0.72rem', fontWeight: 700,
+                                          cursor: bookingMatch ? 'not-allowed' : 'pointer', textAlign: 'center',
+                                          transition: 'all 0.15s ease', display: 'flex', flexDirection: 'column',
+                                          alignItems: 'center', gap: 2, minWidth: 46
+                                        }}
+                                      >
+                                        <span style={{ fontSize: '0.66rem', opacity: 0.85 }}>{startStr}</span>
+                                        <span style={{ fontSize: '0.65rem' }}>{bookingMatch ? '🔴' : isSelected ? '🔵' : '🟢'}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                
+                                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: '0.72rem', color: '#64748B', fontWeight: 600, flexWrap: 'wrap' }}>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E' }}></span> Green = Free Slot</span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444' }}></span> Red = Booked Event</span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563EB' }}></span> Blue = Selected Time</span>
+                                </div>
+                              </div>
+
                               {/* Available Slots (Free) */}
                               <div className="p-3 rounded-3 border" style={{ borderColor: '#e8d5ff', backgroundColor: '#f5f7ff' }}>
                                 <span className="text-secondary font-weight-semibold d-block mb-2 text-uppercase" style={{ fontSize: '0.74rem', letterSpacing: '0.5px', color: '#4f46e5' }}>

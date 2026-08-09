@@ -53,6 +53,8 @@ export default function StudentAttendance() {
   const [isInRange, setIsInRange] = useState(false);
   const [gpsStatus, setGpsStatus] = useState('');
   const [gpsErrorMsg, setGpsErrorMsg] = useState('');
+  const [gpsHelpModalOpen, setGpsHelpModalOpen] = useState(false);
+  const [activeGuideTab, setActiveGuideTab] = useState('android');
   const [simulateGps, setSimulateGps] = useState(false);
   const [timeLeftStr, setTimeLeftStr] = useState('');
   const [gpsAccuracy, setGpsAccuracy] = useState(0);
@@ -750,12 +752,26 @@ export default function StudentAttendance() {
                             )}
 
                             {gpsErrorMsg && (
-                              <div style={{ padding: '12px 16px', borderRadius: 12, background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B', fontSize: '0.82rem', textAlign: 'left', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                                <AlertCircle size={18} style={{ color: '#EF4444', flexShrink: 0, marginTop: 2 }} />
-                                <div>
-                                  <div style={{ fontWeight: 800 }}>Boundary Check Blocked</div>
-                                  <div style={{ marginTop: 2, lineHeight: 1.4 }}>{gpsErrorMsg}</div>
+                              <div style={{ padding: '14px 16px', borderRadius: 12, background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B', fontSize: '0.82rem', textAlign: 'left', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                  <AlertCircle size={18} style={{ color: '#EF4444', flexShrink: 0, marginTop: 2 }} />
+                                  <div>
+                                    <div style={{ fontWeight: 800 }}>Boundary Check Blocked</div>
+                                    <div style={{ marginTop: 2, lineHeight: 1.4 }}>{gpsErrorMsg}</div>
+                                  </div>
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setGpsHelpModalOpen(true)}
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    padding: '6px 12px', background: '#FFFFFF', border: '1px solid #FCA5A5',
+                                    borderRadius: 8, color: '#DC2626', fontSize: '0.78rem', fontWeight: 700,
+                                    cursor: 'pointer', alignSelf: 'flex-start'
+                                  }}
+                                >
+                                  <HelpCircle size={14} /> ⚡ Open GPS Precision & Troubleshooting Guide
+                                </button>
                               </div>
                             )}
 
@@ -1054,6 +1070,105 @@ export default function StudentAttendance() {
             )}
           </div>
         )}
+      {/* GPS Troubleshooting Helper Modal */}
+      {gpsHelpModalOpen && (
+        <div className="custom-modal-overlay" onClick={() => setGpsHelpModalOpen(false)}>
+          <div className="custom-modal-content tailux-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, padding: 0, overflow: 'hidden' }}>
+            <div className="tailux-card-header" style={{ padding: '20px 24px', background: '#F8FAFC' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#EFF6FF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Navigation size={18} style={{ color: '#2563EB' }} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>GPS & Location Helper Guide</h4>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: 1 }}>Troubleshoot mobile GPS permission & accuracy issues</div>
+                </div>
+              </div>
+              <button onClick={() => setGpsHelpModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', alignItems: 'center', padding: 4 }}><X size={18} /></button>
+            </div>
+
+            <div className="tailux-card-body" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Device OS Selector Tabs */}
+              <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid #E2E8F0', paddingBottom: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveGuideTab('android')}
+                  style={{
+                    flex: 1, padding: '8px 12px', borderRadius: 8,
+                    border: activeGuideTab === 'android' ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                    background: activeGuideTab === 'android' ? '#EFF6FF' : '#FFFFFF',
+                    color: activeGuideTab === 'android' ? '#2563EB' : '#64748B',
+                    fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  📱 Android (Chrome)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveGuideTab('ios')}
+                  style={{
+                    flex: 1, padding: '8px 12px', borderRadius: 8,
+                    border: activeGuideTab === 'ios' ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                    background: activeGuideTab === 'ios' ? '#EFF6FF' : '#FFFFFF',
+                    color: activeGuideTab === 'ios' ? '#2563EB' : '#64748B',
+                    fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  🍎 iPhone (Safari)
+                </button>
+              </div>
+
+              {activeGuideTab === 'android' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: '0.85rem', color: '#334155' }}>
+                  <div style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                    <strong>Step 1: Turn ON High Precision Location</strong>
+                    <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: 2 }}>
+                      Go to Phone Settings ➔ Location ➔ Enable "Use Location" & turn ON "Improve Location Accuracy".
+                    </div>
+                  </div>
+                  <div style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                    <strong>Step 2: Reset Chrome Permissions</strong>
+                    <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: 2 }}>
+                      Tap lock icon 🔒 next to URL bar ➔ Site Settings ➔ Location ➔ Select <strong>"Allow"</strong>.
+                    </div>
+                  </div>
+                  <div style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                    <strong>Step 3: Turn OFF Battery Saver</strong>
+                    <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: 2 }}>
+                      Battery saver mode throttles GPS satellite frequency. Turn off battery saver for high accuracy.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: '0.85rem', color: '#334155' }}>
+                  <div style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                    <strong>Step 1: Enable Safari Location Access</strong>
+                    <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: 2 }}>
+                      Open iOS Settings ➔ Safari ➔ Location ➔ Select <strong>"Ask" or "Allow"</strong>.
+                    </div>
+                  </div>
+                  <div style={{ padding: '10px 14px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
+                    <strong>Step 2: Turn ON Precise Location</strong>
+                    <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: 2 }}>
+                      iOS Settings ➔ Privacy & Security ➔ Location Services ➔ Safari ➔ Turn ON <strong>"Precise Location"</strong> toggle.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="tailux-card-footer" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => { setGpsHelpModalOpen(false); detectLiveLocation(); }}
+                style={{ padding: '10px 20px', borderRadius: 10, border: 'none', background: '#2563EB', color: '#FFFFFF', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
+              >
+                🔄 Re-Detect My Location Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </main>
 
       {/* Dedicated Student Attendance Portal Footer (No Navigation Links) */}
