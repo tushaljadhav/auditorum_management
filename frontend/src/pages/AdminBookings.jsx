@@ -20,12 +20,21 @@ function StatusBadge({ status }) {
   );
 }
 
+const formatTime12h = (timeStr) => {
+  if (!timeStr) return '—';
+  const [hStr, mStr] = timeStr.split(':');
+  let h = parseInt(hStr, 10);
+  if (isNaN(h)) return timeStr;
+  const m = mStr || '00';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+};
+
 const deptBadge = (name) => {
-  if (!name || name === '—') return { background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', padding: '3px 9px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 650, display: 'inline-block' };
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  const h = Math.abs(hash) % 360;
-  return { background: `hsl(${h}, 85%, 96%)`, color: `hsl(${h}, 85%, 35%)`, border: `1px solid hsl(${h}, 80%, 90%)`, padding: '3px 9px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 650, display: 'inline-block' };
+  if (!name || name === '—') return { background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 650, display: 'inline-block' };
+  return { background: '#EEF2FF', color: '#3730A3', border: '1px solid #C7D2FE', padding: '4px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 };
 };
 
 export default function AdminBookings() {
@@ -319,47 +328,67 @@ export default function AdminBookings() {
                       onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <td style={{ padding: '14px 18px', fontWeight: 700, color: '#0F172A' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>{b.eventName}</span>
+                      <td style={{ padding: '14px 18px', color: '#0F172A' }}>
+                        <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0F172A' }}>
+                          {b.eventName}
+                        </div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <span style={{ fontSize: '0.7rem', fontFamily: 'monospace', fontWeight: 600, color: '#64748B', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: 4 }}>
+                            ID: #{b.id?.split('_').pop() || b.id}
+                          </span>
                           <button 
                             onClick={() => handleCopyId(b.id)}
-                            style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#94A3B8' }}
-                            title={`Copy ID: ${b.id}`}
+                            style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#6366F1' }}
+                            title={`Copy Full ID: ${b.id}`}
                           >
-                            <Copy size={13} />
+                            <Copy size={12} />
                           </button>
                         </div>
-                        <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 500, marginTop: 1 }}>ID: {b.id}</div>
                       </td>
 
-                      <td style={{ padding: '14px 18px', color: '#334155', fontWeight: 600 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Building2 size={14} style={{ color: '#2563EB' }} />
-                          {venueName}
+                      <td style={{ padding: '14px 18px', color: '#334155' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: 6, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Building2 size={14} style={{ color: '#2563EB' }} />
+                          </div>
+                          <span style={{ fontWeight: 750, color: '#0F172A', fontSize: '0.88rem' }}>{venueName}</span>
                         </div>
                       </td>
 
                       <td style={{ padding: '14px 18px', color: '#334155', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Calendar size={14} style={{ color: '#64748B' }} />
-                          <span style={{ fontWeight: 600 }}>{b.bookingDate}</span>
+                          <Calendar size={14} style={{ color: '#6366F1' }} />
+                          <span style={{ fontWeight: 700, color: '#0F172A' }}>{b.bookingDate}</span>
                         </div>
                       </td>
 
                       <td style={{ padding: '14px 18px', color: '#334155', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Clock size={14} style={{ color: '#64748B' }} />
-                          <span>{b.startTime} - {b.endTime}</span>
+                          <Clock size={14} style={{ color: '#059669' }} />
+                          <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.86rem' }}>
+                            {formatTime12h(b.startTime)} – {formatTime12h(b.endTime)}
+                          </span>
                         </div>
                       </td>
 
-                      <td style={{ padding: '14px 18px', color: '#0F172A', fontWeight: 650 }}>
-                        {facultyName}
+                      <td style={{ padding: '14px 18px', color: '#0F172A' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#6366F1', color: '#FFFFFF', fontSize: '0.75rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {facultyName && facultyName !== '—' ? facultyName[0].toUpperCase() : 'F'}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 750, color: '#0F172A', fontSize: '0.87rem' }}>{facultyName}</div>
+                            {fac?.designation && (
+                              <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 500 }}>{fac.designation}</div>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       <td style={{ padding: '14px 18px' }}>
-                        <span style={deptBadge(deptName)}>{deptName}</span>
+                        <span style={deptBadge(deptName)}>
+                          <Building2 size={12} /> {deptName}
+                        </span>
                       </td>
 
                       <td style={{ padding: '14px 18px', textAlign: 'center' }}>
@@ -418,52 +447,50 @@ export default function AdminBookings() {
             )}
           </div>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Pagination Controls - Always Visible */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
+                borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
+                color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.8rem', fontWeight: 700,
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <ChevronLeft size={14} /> Previous
+            </button>
+
+            {Array.from({ length: totalPages || 1 }, (_, i) => i + 1).map(page => (
               <button
-                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-                disabled={currentPage === 1}
+                key={page}
+                onClick={() => setCurrentPage(page)}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
-                  borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
-                  color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.8rem', fontWeight: 700,
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                  minWidth: 32, height: 32, padding: '0 8px', borderRadius: 8,
+                  border: page === currentPage ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                  background: page === currentPage ? '#2563EB' : '#FFFFFF',
+                  color: page === currentPage ? '#FFFFFF' : '#334155',
+                  fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
                 }}
               >
-                <ChevronLeft size={14} /> Previous
+                {page}
               </button>
+            ))}
 
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  style={{
-                    minWidth: 32, height: 32, padding: '0 8px', borderRadius: 8,
-                    border: page === currentPage ? '1px solid #2563EB' : '1px solid #CBD5E1',
-                    background: page === currentPage ? '#2563EB' : '#FFFFFF',
-                    color: page === currentPage ? '#FFFFFF' : '#334155',
-                    fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
-                  }}
-                >
-                  {page}
-                </button>
-              ))}
-
-              <button
-                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
-                  borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
-                  color: currentPage === totalPages ? '#94A3B8' : '#334155', fontSize: '0.8rem', fontWeight: 700,
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
-                }}
-              >
-                Next <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
+            <button
+              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages || 1))}
+              disabled={currentPage === (totalPages || 1)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
+                borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === (totalPages || 1) ? '#F1F5F9' : '#FFFFFF',
+                color: currentPage === (totalPages || 1) ? '#94A3B8' : '#334155', fontSize: '0.8rem', fontWeight: 700,
+                cursor: currentPage === (totalPages || 1) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
