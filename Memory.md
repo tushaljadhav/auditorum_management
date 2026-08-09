@@ -16,6 +16,9 @@
 - [x] Implemented **100% Collision-Proof Booking ID Generator** (`booking_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`) across JSON (`db.js`) and MySQL (`db_mysql.js`) databases.
 - [x] Created **Official Institutional Attendance PDF Engine** (`pdfHeader.js`) supporting dynamic multi-page A4 output, continuous Sr. No. across pages, repeated headers/strips/table titles, exact 5-column layout (`Sr. No.`, `Name`, `Class`, `Roll No.`, `Date & Time of Attendance`), and last-page coordinator signature block.
 - [x] Isolated **Student GPS Attendance Gateway** (`StudentAttendance.jsx`) by removing return-to-home back buttons, main app footer links, and "Search Another Event" buttons to lock students strictly into their attendance check-in workflow.
+- [x] Implemented **Smart Capacity & Hall Overbooking Warning** in `BookingPortal.jsx`: Inline alert & suggestion box offering larger halls when expected attendees exceed selected venue capacity.
+- [x] Implemented **Venue Maintenance Lock & Blackout Dates** in `AdminVenues.jsx`, `BookingPortal.jsx`, and `server.js`: Admins can set venue status to Maintenance with custom reasons (e.g. AC Repair), locking venue bookings automatically.
+- [x] Implemented **1-Click System Data Backup & Restore Engine** in `AdminLayout.jsx` and `server.js`: Admins can download full JSON database backups and restore system datasets with 1 click.
 - [x] Pushed complete codebase to official GitHub repository: [https://github.com/tushaljadhav/auditorum_management.git](https://github.com/tushaljadhav/auditorum_management.git) on branch `main`.
 
 ---
@@ -26,7 +29,7 @@
 ---
 
 ## Known Issues
-- None. `npm run build` compiles cleanly across 328 modules with 0 errors.
+- None. `npm run build` compiles cleanly with 0 errors across 330 modules.
 
 ---
 
@@ -44,3 +47,5 @@
 - **Decision 5 (Collision-Proof Booking IDs)**: Appended 4-digit random suffix to timestamp-based booking IDs to prevent high-concurrency collisions.
 - **Decision 6 (Official Attendance PDF Spec)**: Replaced generic attendance table exports with an official institutional multi-page PDF engine matching Kirti M. Doongursee College layout specs.
 - **Decision 7 (Student Portal Isolation)**: Stripped all main website navigation elements from the student attendance portal to ensure students focus 100% on location verification and attendance check-in.
+- **Decision 8 (Smart Capacity & Maintenance Locking)**: Added real-time hall capacity recommendations and venue maintenance lockout rules to eliminate booking conflicts and venue overloading.
+- **Decision 9 (1-Click Data Backup/Restore)**: Built full JSON system data backup and restore capabilities directly inside the Admin Layout top bar.
