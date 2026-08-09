@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
-import { Plus, Edit2, Trash2, X, Users, MapPin, Navigation } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Users, MapPin, Navigation, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const S = {
   card: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' },
@@ -22,6 +22,9 @@ export default function AdminVenues() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingVenue, setEditingVenue] = useState(null);
   const [fetchingGps, setFetchingGps] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [form, setForm] = useState({ name: '', capacity: '', location: '', address: '', latitude: '', longitude: '', radius: '50', status: 'Active' });
 
   const fetchVenues = async () => {
@@ -33,6 +36,7 @@ export default function AdminVenues() {
   };
 
   useEffect(() => { fetchVenues(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery]);
 
   const openAddModal = () => { setEditingVenue(null); setForm({ name: '', capacity: '', location: '', address: '', latitude: '', longitude: '', radius: '50', status: 'Active' }); setModalOpen(true); };
   const openEditModal = (v) => {
@@ -77,6 +81,18 @@ export default function AdminVenues() {
     else Swal.fire({ icon: 'error', title: 'Error', text: 'Delete failed.' });
   };
 
+  const filteredVenues = venues.filter(v => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return v.name.toLowerCase().includes(q) || (v.location || '').toLowerCase().includes(q) || (v.address || '').toLowerCase().includes(q);
+  });
+
+  const totalEntries = filteredVenues.length;
+  const totalPages = Math.ceil(totalEntries / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalEntries);
+  const paginatedVenues = filteredVenues.slice(startIndex, endIndex);
+
   if (loading) return <div className="spinner-container" style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="premium-spinner" /></div>;
 
   return (
@@ -106,15 +122,35 @@ export default function AdminVenues() {
         </button>
       </div>
 
+      {/* Tailux Filter Bar */}
+      <div className="tailux-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+        <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: 360 }}>
+          <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none' }} />
+          <input type="text" placeholder="Search venue name, location..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+            style={{ 
+              width: '100%', padding: '8px 12px 8px 36px', fontSize: '0.85rem', color: '#0F172A', 
+              background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, outline: 'none', 
+              boxSizing: 'border-box', fontFamily: 'inherit', transition: 'all 0.15s ease' 
+            }}
+            onFocus={e => { e.target.style.borderColor = '#2563EB'; e.target.style.background = '#FFFFFF'; }}
+            onBlur={e => { e.target.style.borderColor = '#E2E8F0'; e.target.style.background = '#F8FAFC'; }}
+          />
+        </div>
+
+        <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>
+          Showing {filteredVenues.length} of {venues.length} registered halls
+        </div>
+      </div>
+
       {/* Tailux Data Table Card */}
       <div className="tailux-card">
-        {venues.length === 0 ? (
+        {filteredVenues.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '56px 24px', gap: 12, textAlign: 'center' }}>
             <div style={{ width: 54, height: 54, borderRadius: 14, background: '#F8FAFC', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <MapPin size={24} style={{ color: '#94A3B8' }} />
             </div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>No auditorium venues registered yet</div>
-            <div style={{ fontSize: '0.82rem', color: '#64748B' }}>Click "Add New Venue" to set up your first auditorium or hall.</div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>No matching venues found</div>
+            <div style={{ fontSize: '0.82rem', color: '#64748B' }}>Try adjusting your search criteria or add a new hall.</div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -133,9 +169,9 @@ export default function AdminVenues() {
                 </tr>
               </thead>
               <tbody>
-                {venues.map((v, idx) => (
+                {paginatedVenues.map((v, idx) => (
                   <tr key={v.id} 
-                    style={{ borderBottom: idx === venues.length - 1 ? 'none' : '1px solid #F1F5F9', transition: 'background 0.12s ease' }}
+                    style={{ borderBottom: idx === paginatedVenues.length - 1 ? 'none' : '1px solid #F1F5F9', transition: 'background 0.12s ease' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
@@ -218,6 +254,69 @@ export default function AdminVenues() {
             </table>
           </div>
         )}
+
+        {/* DataTables Footer Pagination Controls */}
+        <div style={{ padding: '16px 20px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+          
+          {/* Summary Text */}
+          <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 600 }}>
+            {totalEntries > 0 ? (
+              <>
+                Showing <strong>{startIndex + 1}</strong> to <strong>{endIndex}</strong> of <strong>{totalEntries}</strong> entries
+                {searchQuery && ` (filtered from ${venues.length} total halls)`}
+              </>
+            ) : (
+              `Showing 0 to 0 of 0 entries`
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
+                  borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
+                  color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.8rem', fontWeight: 700,
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <ChevronLeft size={14} /> Previous
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  style={{
+                    minWidth: 32, height: 32, padding: '0 8px', borderRadius: 8,
+                    border: page === currentPage ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                    background: page === currentPage ? '#2563EB' : '#FFFFFF',
+                    color: page === currentPage ? '#FFFFFF' : '#334155',
+                    fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
+                  borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
+                  color: currentPage === totalPages ? '#334155' : '#334155', fontSize: '0.8rem', fontWeight: 700,
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tailux Modal Drawer */}

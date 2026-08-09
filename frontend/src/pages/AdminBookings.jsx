@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 import CustomSelect from '../components/CustomSelect';
-import { Eye, Calendar, MapPin, Clock, Users, Check, X, Trash2, Filter, RefreshCw, Copy, Mail, Phone, Download, Search, CalendarDays, CheckCircle, Building2, Sparkles } from 'lucide-react';
+import { Eye, Calendar, MapPin, Clock, Users, Check, X, Trash2, Filter, RefreshCw, Copy, Mail, Phone, Download, Search, CalendarDays, CheckCircle, Building2, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const STATUS_BADGE = {
   Approved: { class: 'tailux-badge-approved', label: 'Confirmed' },
@@ -38,6 +38,8 @@ export default function AdminBookings() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [venueFilter, setVenueFilter] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const fetchData = async () => {
     try {
@@ -55,6 +57,7 @@ export default function AdminBookings() {
   };
 
   useEffect(() => { fetchData(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, venueFilter]);
 
   const handleDelete = async (id, name) => {
     const r = await Swal.fire({
@@ -148,6 +151,12 @@ export default function AdminBookings() {
     const fac = faculties.find(f => f.id === b.facultyId);
     return venueMatch && (b.eventName.toLowerCase().includes(q) || b.id.toLowerCase().includes(q) || (fac?.name || '').toLowerCase().includes(q));
   });
+
+  const totalEntries = filteredBookings.length;
+  const totalPages = Math.ceil(totalEntries / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalEntries);
+  const paginatedBookings = filteredBookings.slice(startIndex, endIndex);
 
   const venueOptions = [{ value: 'All', label: 'All Venues & Halls' }, ...venues.map(v => ({ value: v.id, label: v.name }))];
 
@@ -299,7 +308,7 @@ export default function AdminBookings() {
                 </tr>
               </thead>
               <tbody>
-                {filteredBookings.map((b, idx) => {
+                {paginatedBookings.map((b, idx) => {
                   const fac = faculties.find(f => f.id === b.facultyId);
                   const facultyName = fac?.name || '—';
                   const deptName = getDeptName(b.departmentId);
@@ -393,6 +402,69 @@ export default function AdminBookings() {
             </table>
           </div>
         )}
+
+        {/* DataTables Footer Pagination Controls */}
+        <div style={{ padding: '16px 20px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+          
+          {/* Summary Text */}
+          <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 600 }}>
+            {totalEntries > 0 ? (
+              <>
+                Showing <strong>{startIndex + 1}</strong> to <strong>{endIndex}</strong> of <strong>{totalEntries}</strong> entries
+                {searchQuery && ` (filtered from ${bookings.length} total bookings)`}
+              </>
+            ) : (
+              `Showing 0 to 0 of 0 entries`
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
+                  borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
+                  color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.8rem', fontWeight: 700,
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <ChevronLeft size={14} /> Previous
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  style={{
+                    minWidth: 32, height: 32, padding: '0 8px', borderRadius: 8,
+                    border: page === currentPage ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                    background: page === currentPage ? '#2563EB' : '#FFFFFF',
+                    color: page === currentPage ? '#FFFFFF' : '#334155',
+                    fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
+                  borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
+                  color: currentPage === totalPages ? '#94A3B8' : '#334155', fontSize: '0.8rem', fontWeight: 700,
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Detail Popover Modal */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 import CustomSelect from '../components/CustomSelect';
-import { Plus, Edit2, Trash2, X, Mail, Phone, Users, Settings2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Mail, Phone, Users, Settings2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const S = {
   card: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' },
@@ -52,6 +52,8 @@ export default function AdminFaculty() {
   const [editingTitleName, setEditingTitleName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [form, setForm] = useState({ name: '', email: '', mobile: '', departmentId: '', designationId: '' });
 
   const fetchData = async () => {
@@ -65,6 +67,7 @@ export default function AdminFaculty() {
   };
 
   useEffect(() => { fetchData(); }, []);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, deptFilter]);
 
   const openAddModal = () => { setEditingFaculty(null); setForm({ name: '', email: '', mobile: '', departmentId: '', designationId: '' }); setModalOpen(true); };
   const openEditModal = (fac) => { setEditingFaculty(fac); setForm({ name: fac.name, email: fac.email, mobile: fac.mobile, departmentId: fac.departmentId, designationId: fac.designationId || '' }); setModalOpen(true); };
@@ -127,6 +130,12 @@ export default function AdminFaculty() {
     if (!q) return deptMatch;
     return deptMatch && (f.name.toLowerCase().includes(q) || f.email.toLowerCase().includes(q) || (f.mobile || '').includes(q));
   });
+
+  const totalEntries = filteredFaculty.length;
+  const totalPages = Math.ceil(totalEntries / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalEntries);
+  const paginatedFaculty = filteredFaculty.slice(startIndex, endIndex);
 
   const deptOptions = [{ value: 'All', label: 'All Departments' }, ...departments.map(d => ({ value: d.id, label: d.name }))];
 
@@ -225,11 +234,11 @@ export default function AdminFaculty() {
                 </tr>
               </thead>
               <tbody>
-                {filteredFaculty.map((fac, idx) => {
+                {paginatedFaculty.map((fac, idx) => {
                   const initial = fac.name ? fac.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'F';
                   return (
                     <tr key={fac.id}
-                      style={{ borderBottom: idx === filteredFaculty.length - 1 ? 'none' : '1px solid #F1F5F9', transition: 'background 0.12s ease' }}
+                      style={{ borderBottom: idx === paginatedFaculty.length - 1 ? 'none' : '1px solid #F1F5F9', transition: 'background 0.12s ease' }}
                       onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
@@ -284,6 +293,69 @@ export default function AdminFaculty() {
             </table>
           </div>
         )}
+
+        {/* DataTables Footer Pagination Controls */}
+        <div style={{ padding: '16px 20px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+          
+          {/* Summary Text */}
+          <div style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 600 }}>
+            {totalEntries > 0 ? (
+              <>
+                Showing <strong>{startIndex + 1}</strong> to <strong>{endIndex}</strong> of <strong>{totalEntries}</strong> entries
+                {searchQuery && ` (filtered from ${faculty.length} total members)`}
+              </>
+            ) : (
+              `Showing 0 to 0 of 0 entries`
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
+                  borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
+                  color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.8rem', fontWeight: 700,
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <ChevronLeft size={14} /> Previous
+              </button>
+
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  style={{
+                    minWidth: 32, height: 32, padding: '0 8px', borderRadius: 8,
+                    border: page === currentPage ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                    background: page === currentPage ? '#2563EB' : '#FFFFFF',
+                    color: page === currentPage ? '#FFFFFF' : '#334155',
+                    fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  {page}
+                </button>
+              ))}
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px',
+                  borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
+                  color: currentPage === totalPages ? '#334155' : '#334155', fontSize: '0.8rem', fontWeight: 700,
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tailux Add/Edit Faculty Modal */}
