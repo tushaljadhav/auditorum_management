@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import {
   LayoutDashboard, Building2, Users, MapPin, CalendarDays,
   UserCheck, LogOut, Menu, X, ChevronDown, ChevronRight,
-  Bell, Settings, Shield
+  Bell, Settings, Shield, Download, Upload, Database, RefreshCw
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -36,6 +36,89 @@ export default function AdminLayout() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [parsedBackup, setParsedBackup] = useState(null);
+  const [restoring, setRestoring] = useState(false);
+
+  const handleDownloadBackup = () => {
+    window.location.href = '/api/admin/backup';
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'Database Backup Downloaded!',
+      showConfirmButton: false,
+      timer: 2000
+    });
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target.result);
+        if (json && json.data) {
+          setParsedBackup(json);
+        } else {
+          Swal.fire({ icon: 'error', title: 'Invalid Backup File', text: 'Uploaded file does not contain valid auditorium database structure.' });
+          setSelectedFile(null);
+          setParsedBackup(null);
+        }
+      } catch {
+        Swal.fire({ icon: 'error', title: 'Invalid JSON', text: 'Could not parse JSON content from the uploaded file.' });
+        setSelectedFile(null);
+        setParsedBackup(null);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExecuteRestore = async () => {
+    if (!parsedBackup) return;
+    const confirm = await Swal.fire({
+      title: 'Restore Database?',
+      html: `This will restore records from <strong>${parsedBackup.system || 'Backup'}</strong> (Backup Date: ${parsedBackup.backupDate?.split('T')[0] || 'Unknown'}). Proceeding will overwrite existing master data.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Restore System',
+      confirmButtonColor: '#6366F1',
+      cancelButtonColor: '#64748B',
+      borderRadius: '16px'
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    setRestoring(true);
+    try {
+      const res = await fetch('/api/admin/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupData: parsedBackup })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        Swal.fire({
+          icon: 'success',
+          title: 'Database Restored Successfully!',
+          text: `Restored ${data.details?.departmentsCount || 0} departments, ${data.details?.facultyCount || 0} faculty, ${data.details?.venuesCount || 0} venues, and ${data.details?.bookingsCount || 0} bookings.`,
+          confirmButtonColor: '#2563EB'
+        }).then(() => window.location.reload());
+      } else {
+        const err = await res.json();
+        Swal.fire({ icon: 'error', title: 'Restore Failed', text: err.error || 'Server error during restore.' });
+      }
+    } catch {
+      Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to connect to server during restore.' });
+    } finally {
+      setRestoring(false);
+      setRestoreModalOpen(false);
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -309,6 +392,39 @@ export default function AdminLayout() {
             </div>
           </div>
 
+          {/* Backup & Restore Control Buttons */}
+          <button
+            onClick={handleDownloadBackup}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', background: '#FFFFFF', border: '1px solid #CBD5E1',
+              borderRadius: '10px', fontSize: '0.78rem', fontWeight: 700, color: '#334155',
+              cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', transition: 'all 0.15s ease'
+            }}
+            title="Download full JSON backup of system database"
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.color = '#2563EB'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.color = '#334155'; }}
+          >
+            <Download size={14} style={{ color: '#2563EB' }} />
+            {!isMobile && <span>Backup</span>}
+          </button>
+
+          <button
+            onClick={() => setRestoreModalOpen(true)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', background: '#FFFFFF', border: '1px solid #CBD5E1',
+              borderRadius: '10px', fontSize: '0.78rem', fontWeight: 700, color: '#334155',
+              cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', transition: 'all 0.15s ease'
+            }}
+            title="Restore database from JSON backup file"
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#6366F1'; e.currentTarget.style.color = '#6366F1'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.color = '#334155'; }}
+          >
+            <Upload size={14} style={{ color: '#6366F1' }} />
+            {!isMobile && <span>Restore</span>}
+          </button>
+
           {/* System Status Badge */}
           {!isMobile && (
             <div style={{
@@ -517,6 +633,89 @@ export default function AdminLayout() {
           </div>
         </footer>
       </div>
+
+      {/* Restore Database Modal */}
+      {restoreModalOpen && (
+        <div className="custom-modal-overlay" onClick={() => setRestoreModalOpen(false)}>
+          <div className="custom-modal-content tailux-card" onClick={e => e.stopPropagation()} style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }}>
+            <div className="tailux-card-header" style={{ padding: '20px 24px', background: '#F8FAFC' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#EEF2FF', border: '1px solid #C7D2FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Database size={18} style={{ color: '#4F46E5' }} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>Restore Database Backup</h4>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: 1 }}>Upload a valid `.json` database backup file</div>
+                </div>
+              </div>
+              <button onClick={() => setRestoreModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', alignItems: 'center', padding: 4 }}><X size={18} /></button>
+            </div>
+
+            <div className="tailux-card-body" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ padding: '20px', border: '2px dashed #CBD5E1', borderRadius: 12, textAlign: 'center', background: '#F8FAFC' }}>
+                <Upload size={32} style={{ color: '#6366F1', marginBottom: 8 }} />
+                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0F172A' }}>
+                  {selectedFile ? selectedFile.name : 'Select Database Backup File (.json)'}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: 4 }}>
+                  Only valid JSON backup files generated by Kirti College Auditorium System are supported.
+                </div>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                  id="backupFileInput"
+                />
+                <label
+                  htmlFor="backupFileInput"
+                  style={{
+                    display: 'inline-block', marginTop: 12, padding: '8px 16px',
+                    borderRadius: 8, background: '#2563EB', color: '#FFFFFF',
+                    fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  Browse Backup File
+                </label>
+              </div>
+
+              {parsedBackup && (
+                <div style={{ padding: '14px 16px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, fontSize: '0.82rem', color: '#166534' }}>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>✅ Valid Backup Detected</div>
+                  <div>System: {parsedBackup.system}</div>
+                  <div>Backup Date: {parsedBackup.backupDate}</div>
+                  <div style={{ marginTop: 6, fontWeight: 700, color: '#15803D' }}>
+                    Contains: {parsedBackup.data?.departments?.length || 0} Departments, {parsedBackup.data?.faculty?.length || 0} Faculty, {parsedBackup.data?.venues?.length || 0} Venues, {parsedBackup.data?.bookings?.length || 0} Bookings.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="tailux-card-footer" style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setRestoreModalOpen(false)}
+                style={{ padding: '9px 18px', borderRadius: 10, border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#64748B', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!parsedBackup || restoring}
+                onClick={handleExecuteRestore}
+                style={{
+                  padding: '9px 22px', borderRadius: 10, border: 'none',
+                  background: (!parsedBackup || restoring) ? '#94A3B8' : '#4F46E5',
+                  color: '#FFFFFF', fontSize: '0.85rem', fontWeight: 700,
+                  cursor: (!parsedBackup || restoring) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {restoring ? 'Restoring System...' : 'Restore System Data'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

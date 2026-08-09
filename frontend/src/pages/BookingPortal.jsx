@@ -6,7 +6,7 @@ import Footer from '../components/Footer';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import { drawCollegeHeader, downloadOfficialReceiptPDF } from '../utils/pdfHeader';
-import { Calendar, Clock, MapPin, Users, BookOpen, ChevronLeft, ArrowRight, CheckCircle, Search, HelpCircle, PlusCircle, Download, Home, Building2, User } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, BookOpen, ChevronLeft, ArrowRight, CheckCircle, Search, HelpCircle, PlusCircle, Download, Home, Building2, User, AlertTriangle } from 'lucide-react';
 
 export default function BookingPortal() {
   const navigate = useNavigate();
@@ -1647,6 +1647,36 @@ export default function BookingPortal() {
                         />
                       </div>
                     </div>
+
+                    {/* Smart Capacity Overbooking Warning Box */}
+                    {(() => {
+                      const selVenue = venues.find(v => v.id === bookingForm.venueId);
+                      const isOver = selVenue && Number(bookingForm.attendees) > Number(selVenue.capacity);
+                      const largerHalls = venues.filter(v => v.id !== bookingForm.venueId && v.status !== 'Maintenance' && Number(v.capacity) >= Number(bookingForm.attendees));
+                      if (!isOver) return null;
+                      return (
+                        <div className="col-12 animate-fade-in" style={{ marginTop: 4 }}>
+                          <div style={{ padding: '14px 16px', borderRadius: 12, background: '#FFFBEB', border: '1px solid #FCD34D', color: '#78350F', fontSize: '0.88rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: '#B45309', marginBottom: 4 }}>
+                              <AlertTriangle size={18} style={{ color: '#D97706', flexShrink: 0 }} />
+                              <span>Capacity Warning: Expected Attendees ({bookingForm.attendees}) exceed Hall Capacity ({selVenue.capacity} seats)</span>
+                            </div>
+                            <div>
+                              Selected <strong>{selVenue.name}</strong> max capacity is {selVenue.capacity} seats.
+                              {largerHalls.length > 0 ? (
+                                <div style={{ marginTop: 6, fontWeight: 600, color: '#92400E' }}>
+                                  💡 Recommended Larger Halls: {largerHalls.map(v => `${v.name} (${v.capacity} seats)`).join(', ')}.
+                                </div>
+                              ) : (
+                                <div style={{ marginTop: 4, fontWeight: 500 }}>
+                                  Please verify seating arrangement or split attendees.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="col-12">
                       <label className="form-label font-weight-bold text-secondary">Event Description</label>

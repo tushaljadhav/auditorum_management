@@ -163,8 +163,8 @@ const dbMysql = {
   addVenue: async (v) => {
     const id = `venue_${Date.now()}`;
     await query(`
-      INSERT INTO venues (id, name, capacity, location, address, latitude, longitude, radius, status) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO venues (id, name, capacity, location, address, latitude, longitude, radius, status, maintenanceReason) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       v.name,
@@ -174,7 +174,8 @@ const dbMysql = {
       v.latitude !== undefined && v.latitude !== '' ? Number(v.latitude) : null,
       v.longitude !== undefined && v.longitude !== '' ? Number(v.longitude) : null,
       v.radius !== undefined ? Number(v.radius) : 50,
-      v.status || 'Active'
+      v.status || 'Active',
+      v.maintenanceReason || ''
     ]);
     return { id, ...v };
   },
@@ -332,6 +333,64 @@ const dbMysql = {
       WHERE bookingId = ? AND LOWER(rollNumber) = LOWER(?)
     `, [bookingId, rollNumber]);
     return rows[0].count > 0;
+  },
+
+  getAttendanceRecords: async () => {
+    return await query('SELECT * FROM attendance');
+  },
+
+  restoreFullBackup: async (backupObj) => {
+    await query('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+      if (backupObj.departments && Array.isArray(backupObj.departments)) {
+        await query('TRUNCATE TABLE departments');
+        for (const d of backupObj.departments) {
+          await query('INSERT INTO departments (id, name) VALUES (?, ?)', [d.id, d.name]);
+        }
+      }
+      if (backupObj.designations && Array.isArray(backupObj.designations)) {
+        await query('TRUNCATE TABLE designations');
+        for (const des of backupObj.designations) {
+          await query('INSERT INTO designations (id, name) VALUES (?, ?)', [des.id, des.name]);
+        }
+      }
+      if (backupObj.faculty && Array.isArray(backupObj.faculty)) {
+        await query('TRUNCATE TABLE faculty');
+        for (const f of backupObj.faculty) {
+          await query('INSERT INTO faculty (id, name, email, mobile, departmentId, designationId) VALUES (?, ?, ?, ?, ?, ?)', 
+            [f.id, f.name, f.email, f.mobile, f.departmentId, f.designationId || null]);
+        }
+      }
+      if (backupObj.venues && Array.isArray(backupObj.venues)) {
+        await query('TRUNCATE TABLE venues');
+        for (const v of backupObj.venues) {
+          await query('INSERT INTO venues (id, name, capacity, location, address, latitude, longitude, radius, status, maintenanceReason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [v.id, v.name, v.capacity, v.location || '', v.address || '', v.latitude || null, v.longitude || null, v.radius || 50, v.status || 'Active', v.maintenanceReason || '']);
+        }
+      }
+      if (backupObj.bookings && Array.isArray(backupObj.bookings)) {
+        await query('TRUNCATE TABLE bookings');
+        for (const b of backupObj.bookings) {
+          await query('INSERT INTO bookings (id, eventName, departmentId, facultyId, venueId, eventDescription, bookingDate, startTime, endTime, attendees, status, attendanceStatus, attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [b.id, b.eventName, b.departmentId, b.facultyId, b.venueId, b.eventDescription || '', b.bookingDate, b.startTime, b.endTime, b.attendees, b.status || 'Approved', b.attendanceStatus || 'CLOSED', b.attendanceWindowStart || null, b.attendanceWindowEnd || null, b.coordinator || '', b.email || '', b.phone || '']);
+        }
+      }
+      if (backupObj.attendance && Array.isArray(backupObj.attendance)) {
+        await query('TRUNCATE TABLE attendance');
+        for (const a of backupObj.attendance) {
+          await query('INSERT INTO attendance (id, bookingId, rollNumber, studentName, classStream, latitude, longitude, distanceFromVenue, checkInTime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [a.id || `att_${Date.now()}`, a.bookingId, a.rollNumber, a.studentName, a.classStream || 'General', a.latitude || 0, a.longitude || 0, a.distanceFromVenue || 0, a.checkInTime || new Date().toISOString()]);
+        }
+      }
+    } finally {
+      await query('SET FOREIGN_KEY_CHECKS = 1');
+    }
+    return {
+      departmentsCount: backupObj.departments?.length || 0,
+      facultyCount: backupObj.faculty?.length || 0,
+      venuesCount: backupObj.venues?.length || 0,
+      bookingsCount: backupObj.bookings?.length || 0
+    };
   }
 };
 

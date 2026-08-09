@@ -343,6 +343,28 @@ const db = {
     }
     
     return true; // No conflict
+  },
+
+  getUsers: () => readDb().users || [],
+
+  getAttendanceRecords: () => readDb().attendance || [],
+
+  restoreFullBackup: (backupObj) => {
+    const data = readDb();
+    if (backupObj.users && Array.isArray(backupObj.users)) data.users = backupObj.users;
+    if (backupObj.departments && Array.isArray(backupObj.departments)) data.departments = backupObj.departments;
+    if (backupObj.faculty && Array.isArray(backupObj.faculty)) data.faculty = backupObj.faculty;
+    if (backupObj.venues && Array.isArray(backupObj.venues)) data.venues = backupObj.venues;
+    if (backupObj.bookings && Array.isArray(backupObj.bookings)) data.bookings = backupObj.bookings;
+    if (backupObj.attendance && Array.isArray(backupObj.attendance)) data.attendance = backupObj.attendance;
+    if (backupObj.designations && Array.isArray(backupObj.designations)) data.designations = backupObj.designations;
+    writeDb(data);
+    return {
+      departmentsCount: (data.departments || []).length,
+      facultyCount: (data.faculty || []).length,
+      venuesCount: (data.venues || []).length,
+      bookingsCount: (data.bookings || []).length
+    };
   }
 };
 

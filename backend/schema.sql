@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS venues (
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
     radius INT DEFAULT 50,
-    status VARCHAR(50) DEFAULT 'Active'
+    status VARCHAR(50) DEFAULT 'Active',
+    maintenanceReason TEXT
 );
 
 -- Seed Default Venues

@@ -431,6 +431,15 @@ app.post('/api/bookings/check-availability', async (req, res) => {
       return res.status(400).json({ isAvailable: false, error: `Bookings for today must be scheduled at least 10 minutes in advance. Earliest start time for today is ${minH}:${minM}.` });
     }
 
+    const venuesList = await dbMysql.getVenues();
+    const targetVenue = venuesList.find(v => v.id === venueId);
+    if (targetVenue && (targetVenue.status === 'Maintenance' || targetVenue.status === 'Inactive')) {
+      return res.status(400).json({ 
+        isAvailable: false, 
+        error: `🔒 ${targetVenue.name} is currently under maintenance (${targetVenue.maintenanceReason || 'Scheduled Repair'}). Bookings are locked.` 
+      });
+    }
+
     const isAvailable = await dbMysql.isSlotAvailable(venueId, bookingDate, startTime, endTime, excludeBookingId);
     
     // Get all approved bookings for this venue on this date
@@ -845,6 +854,57 @@ app.post('/api/attendance/mark', async (req, res) => {
       message: 'Attendance marked successfully!', 
       record 
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Admin System Backup & Restore APIs ---
+app.get('/api/admin/backup', async (req, res) => {
+  try {
+    const [users, departments, faculty, venues, bookings, attendance, designations] = await Promise.all([
+      dbMysql.getUsers ? dbMysql.getUsers() : [],
+      dbMysql.getDepartments(),
+      dbMysql.getFaculty(),
+      dbMysql.getVenues(),
+      dbMysql.getBookings(),
+      dbMysql.getAttendanceRecords ? dbMysql.getAttendanceRecords() : [],
+      dbMysql.getDesignations ? dbMysql.getDesignations() : []
+    ]);
+
+    const backupData = {
+      system: "Kirti M. Doongursee College Auditorium System",
+      version: "2.0",
+      backupDate: new Date().toISOString(),
+      timestamp: Date.now(),
+      data: {
+        users,
+        departments,
+        faculty,
+        venues,
+        bookings,
+        attendance,
+        designations
+      }
+    };
+
+    const fileName = `auditorium_system_backup_${new Date().toISOString().split('T')[0]}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(JSON.stringify(backupData, null, 2));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/restore', requireAuth, async (req, res) => {
+  const { backupData } = req.body;
+  if (!backupData || !backupData.data) {
+    return res.status(400).json({ error: 'Invalid backup format. Missing root data object.' });
+  }
+  try {
+    const result = await dbMysql.restoreFullBackup(backupData.data);
+    res.json({ success: true, message: 'System restored successfully!', details: result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

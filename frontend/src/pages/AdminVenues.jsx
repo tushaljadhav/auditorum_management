@@ -38,10 +38,10 @@ export default function AdminVenues() {
   useEffect(() => { fetchVenues(); }, []);
   useEffect(() => { setCurrentPage(1); }, [searchQuery]);
 
-  const openAddModal = () => { setEditingVenue(null); setForm({ name: '', capacity: '', location: '', address: '', latitude: '', longitude: '', radius: '50', status: 'Active' }); setModalOpen(true); };
+  const openAddModal = () => { setEditingVenue(null); setForm({ name: '', capacity: '', location: '', address: '', latitude: '', longitude: '', radius: '50', status: 'Active', maintenanceReason: '' }); setModalOpen(true); };
   const openEditModal = (v) => {
     setEditingVenue(v);
-    setForm({ name: v.name, capacity: v.capacity.toString(), location: v.location || '', address: v.address || '', latitude: v.latitude != null ? v.latitude.toString() : '', longitude: v.longitude != null ? v.longitude.toString() : '', radius: v.radius != null ? v.radius.toString() : '50', status: v.status || 'Active' });
+    setForm({ name: v.name, capacity: v.capacity.toString(), location: v.location || '', address: v.address || '', latitude: v.latitude != null ? v.latitude.toString() : '', longitude: v.longitude != null ? v.longitude.toString() : '', radius: v.radius != null ? v.radius.toString() : '50', status: v.status || 'Active', maintenanceReason: v.maintenanceReason || '' });
     setModalOpen(true);
   };
 
@@ -415,11 +415,27 @@ export default function AdminVenues() {
                     <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} 
                       style={{ width: '100%', padding: '9px 12px', fontSize: '0.875rem', color: '#0F172A', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, outline: 'none', boxSizing: 'border-box' }}
                     >
-                      <option value="Active">Active</option>
+                      <option value="Active">Active (Available)</option>
+                      <option value="Maintenance">Maintenance (Locked)</option>
                       <option value="Inactive">Inactive</option>
                     </select>
                   </div>
                 </div>
+
+                {form.status === 'Maintenance' && (
+                  <div style={{ marginTop: 4 }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#B45309', marginBottom: 6 }}>
+                      🔒 Maintenance Reason & Blackout Details
+                    </label>
+                    <textarea 
+                      placeholder="e.g. AC Servicing & Stage Renovation (Aug 15 - Aug 25). Bookings locked." 
+                      value={form.maintenanceReason || ''} 
+                      onChange={e => setForm({ ...form, maintenanceReason: e.target.value })} 
+                      rows={2} 
+                      style={{ width: '100%', padding: '9px 12px', fontSize: '0.85rem', color: '#78350F', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 10, outline: 'none', boxSizing: 'border-box' }} 
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Modal Footer Controls */}
