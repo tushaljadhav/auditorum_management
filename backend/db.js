@@ -163,7 +163,14 @@ const db = {
   },
 
   // Faculty CRUD
-  getFaculty: () => readDb().faculty,
+  getFaculty: () => {
+    const data = readDb();
+    const designations = data.designations || [];
+    return (data.faculty || []).map(f => {
+      const desig = designations.find(d => d.id === f.designationId);
+      return { ...f, designationName: desig ? desig.name : '' };
+    });
+  },
   addFaculty: (facultyMember) => {
     const data = readDb();
     const newFaculty = { id: `faculty_${Date.now()}`, ...facultyMember };

@@ -1617,7 +1617,7 @@ export default function BookingPortal() {
                       <CustomSelect 
                         value={bookingForm.facultyId}
                         onChange={(val) => setBookingForm({ ...bookingForm, facultyId: val })}
-                        options={filteredFaculties.map(f => ({ value: f.id, label: f.name }))}
+                        options={filteredFaculties.map(f => ({ value: f.id, label: `${f.designationName ? `${f.designationName} ` : ''}${f.name}` }))}
                         placeholder="Select Faculty..."
                         disabled={!bookingForm.departmentId}
                       />

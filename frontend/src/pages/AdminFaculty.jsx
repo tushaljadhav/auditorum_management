@@ -239,7 +239,9 @@ export default function AdminFaculty() {
                             {initial}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.92rem' }}>{fac.name}</div>
+                            <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.92rem' }}>
+                              {(fac.designationName || getDesigName(fac.designationId)) ? `${fac.designationName || getDesigName(fac.designationId)} ` : ''}{fac.name}
+                            </div>
                             <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: 1 }}>ID: {fac.id}</div>
                           </div>
                         </div>
