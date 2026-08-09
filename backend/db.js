@@ -217,7 +217,7 @@ const db = {
   addBooking: (booking) => {
     const data = readDb();
     const newBooking = { 
-      id: `booking_${Date.now()}`, 
+      id: `booking_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`, 
       status: "Pending", // Default status
       attendanceStatus: "CLOSED",
       attendanceWindowStart: null,

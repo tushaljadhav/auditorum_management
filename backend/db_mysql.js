@@ -207,7 +207,7 @@ const dbMysql = {
     return await query('SELECT * FROM bookings');
   },
   addBooking: async (b) => {
-    const id = `booking_${Date.now()}`;
+    const id = `booking_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
     await query(`
       INSERT INTO bookings (
         id, eventName, departmentId, facultyId, venueId, eventDescription, 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { jsPDF } from 'jspdf';
+import { drawCollegeHeader, downloadOfficialAttendancePDF } from '../utils/pdfHeader';
 import Footer from '../components/Footer';
 import { 
   MapPin, 
@@ -220,6 +222,17 @@ export default function StudentAttendance() {
     document.body.removeChild(link);
   };
 
+  // ── PDF Attendance Report Download ──────────────────────────
+  const downloadAttendancePDF = async (list, currentBooking = booking) => {
+    if (!list || list.length === 0) {
+      Swal.fire({ icon: 'info', title: 'No Roster Data', text: 'There are no attendance records to export yet.' });
+      return;
+    }
+    if (!currentBooking) return;
+
+    await downloadOfficialAttendancePDF(list, currentBooking);
+  };
+
   const handleShare = () => {
     const shareUrl = `${window.location.origin}/attendance?bookingId=${booking.id}`;
     const shareText = `Please mark your GPS-based attendance for the event: ${booking.eventName}`;
@@ -263,11 +276,11 @@ export default function StudentAttendance() {
         setTimeLeftStr('Expired');
         
         if (!isStudent && attendanceList && attendanceList.length > 0) {
-          downloadAttendanceCSV(attendanceList, booking.eventName);
+          downloadAttendancePDF(attendanceList, booking);
           Swal.fire({
             icon: 'info',
             title: 'Attendance Session Ended',
-            text: 'The session has closed. Your report has been downloaded automatically.',
+            text: 'The session has closed. Your attendance PDF report has been downloaded automatically.',
             confirmButtonColor: '#2563EB',
             borderRadius: '16px'
           });
@@ -485,6 +498,8 @@ export default function StudentAttendance() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#F8FAFC', fontFamily: "'DM Sans', sans-serif", color: '#0F172A', position: 'relative' }}>
       
+      {/* Hidden logo image for PDF generation */}
+      <img id="attendance-college-logo" src="/Logo.png" style={{ display: 'none' }} alt="college-logo" crossOrigin="anonymous" />
       {/* Decorative Gradient Background Elements */}
       <div style={{ position: 'absolute', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(99, 102, 241, 0.07) 0%, transparent 70%)', top: '-200px', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 0 }} />
       <div style={{ position: 'absolute', width: '450px', height: '450px', background: 'radial-gradient(circle, rgba(16, 185, 129, 0.05) 0%, transparent 70%)', bottom: '0', right: '0', pointerEvents: 'none', zIndex: 0 }} />
@@ -492,20 +507,6 @@ export default function StudentAttendance() {
       {/* Header Bar */}
       <header style={{ zIndex: 10, background: '#FFFFFF', borderBottom: '1px solid #E2E8F0', padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 12px rgba(0,0,0,0.03)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button 
-            onClick={() => navigate('/')}
-            style={{ 
-              color: '#475569', width: '38px', height: '38px', borderRadius: '10px', 
-              background: '#F1F5F9', border: '1px solid #E2E8F0', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#E2E8F0'; e.currentTarget.style.color = '#0F172A'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#F1F5F9'; e.currentTarget.style.color = '#475569'; }}
-            title="Return to Home"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <img src="/Logo.png" alt="College Logo" style={{ height: '38px', objectFit: 'contain' }} />
             <div style={{ borderLeft: '1px solid #CBD5E1', paddingLeft: 12 }}>
@@ -601,15 +602,8 @@ export default function StudentAttendance() {
           /* BOOKING DETAILS & CONTROLS VIEW */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             
-            {/* Navigation back bar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <button 
-                onClick={() => { setBookingId(''); setTrackIdInput(''); setBooking(null); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', fontSize: '0.85rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6, padding: 0 }}
-              >
-                <ArrowLeft size={16} /> Search Another Event
-              </button>
-
+            {/* Navigation top bar */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
               <button 
                 onClick={() => setIsStudent(!isStudent)}
                 style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#2563EB', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
@@ -996,13 +990,22 @@ export default function StudentAttendance() {
                               Live Verified Attendance Roster ({attendanceList.length})
                             </div>
                             {attendanceList.length > 0 && (
-                              <button 
-                                type="button"
-                                onClick={() => downloadAttendanceCSV(attendanceList, booking.eventName)}
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#10B981', color: '#FFFFFF', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)' }}
-                              >
-                                <Download size={13} /> Export Excel / CSV
-                              </button>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button 
+                                  type="button"
+                                  onClick={() => downloadAttendancePDF(attendanceList, booking)}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: 'none', background: '#2563EB', color: '#FFFFFF', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)' }}
+                                >
+                                  <Download size={13} /> Download PDF
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => downloadAttendanceCSV(attendanceList, booking.eventName)}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: '1.5px solid #10B981', background: '#ECFDF5', color: '#059669', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                                >
+                                  <Download size={13} /> Export CSV
+                                </button>
+                              </div>
                             )}
                           </div>
 
@@ -1053,8 +1056,11 @@ export default function StudentAttendance() {
         )}
       </main>
 
-      {/* Rich Footer Component */}
-      <Footer />
+      {/* Dedicated Student Attendance Portal Footer (No Navigation Links) */}
+      <footer style={{ background: '#FFFFFF', borderTop: '1px solid #E2E8F0', padding: '20px 28px', textAlign: 'center', fontSize: '0.82rem', color: '#64748B', zIndex: 10 }}>
+        <div style={{ fontWeight: 600, color: '#334155' }}>© 2026 Kirti M. Doongursee College • Official Student GPS Attendance Gateway</div>
+        <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: 4 }}>Location-Verified Zero-Proxy Attendance Submission</div>
+      </footer>
     </div>
   );
 }

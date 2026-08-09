@@ -5,6 +5,7 @@ import CustomSelect from '../components/CustomSelect';
 import Footer from '../components/Footer';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
+import { drawCollegeHeader, downloadOfficialReceiptPDF } from '../utils/pdfHeader';
 import { Calendar, Clock, MapPin, Users, BookOpen, ChevronLeft, ArrowRight, CheckCircle, Search, HelpCircle, PlusCircle, Download, Home, Building2, User } from 'lucide-react';
 
 export default function BookingPortal() {
@@ -705,152 +706,9 @@ export default function BookingPortal() {
     ? `${window.location.origin}/booking?track=${bookingResult.id}` 
     : "";
 
-  const downloadPDFReceipt = (booking = bookingResult) => {
+  const downloadPDFReceipt = async (booking = bookingResult) => {
     if (!booking) return;
-    
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-
-    // Elegant borders
-    doc.setDrawColor(154, 85, 255); // Purple border
-    doc.setLineWidth(1);
-    doc.rect(5, 5, 200, 287); // Page margin border
-    
-    // Header Title banner
-    doc.setFillColor(154, 85, 255);
-    doc.rect(5, 5, 200, 25, 'F');
-    
-    // Add college logo image
-    const logoImg = document.getElementById("college-logo-img");
-    if (logoImg) {
-      try {
-        doc.addImage(logoImg, 'PNG', 12, 8, 19, 19);
-      } catch (err) {
-        console.error("Failed to add logo to PDF:", err);
-      }
-    }
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(15);
-    doc.text("KIRTI M. DOONGURSEE COLLEGE", 34, 15);
-    doc.setFontSize(9.5);
-    doc.setFont("Helvetica", "normal");
-    doc.text("Auditorium & Venue Booking System", 34, 21);
-
-    // Details header title
-    doc.setTextColor(30, 41, 59); // Slate-800
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("BOOKING REQUEST RECEIPT", 105, 45, { align: "center" });
-    
-    doc.setDrawColor(226, 232, 240);
-    doc.line(20, 50, 190, 50);
-
-    const selectedFaculty = faculties.find(f => f.id === booking.facultyId);
-    const requestedOnStr = new Date().toLocaleString('en-US', { 
-      dateStyle: 'medium', 
-      timeStyle: 'short' 
-    });
-
-    // Datatable Dimensions & Coordinates
-    const tableX = 20;
-    const tableWidth = 170;
-    const col1Width = 55;
-    const headerHeight = 10;
-    const rowHeight = 9;
-    let currentY = 52;
-
-    // Draw Datatable Header Row
-    doc.setFillColor(154, 85, 255); // Purple
-    doc.rect(tableX, currentY, tableWidth, headerHeight, 'F');
-    
-    // Header Row Text
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("Particulars / Fields", tableX + 5, currentY + 6.5);
-    doc.text("Details", tableX + col1Width + 5, currentY + 6.5);
-    
-    currentY += headerHeight;
-
-    // Datatable Rows Array
-    const tableData = [
-      { label: "Faculty", value: selectedFaculty?.name || "N/A" },
-      { label: "Booking ID", value: booking.id },
-      { label: "Event Name", value: booking.eventName },
-      { label: "Venue (Hall)", value: selectedVenue?.name || "N/A" },
-      { label: "Booking Date", value: booking.bookingDate },
-      { label: "Time Slot", value: `${booking.startTime} - ${booking.endTime}` },
-      { label: "Department", value: selectedDept?.name || "N/A" },
-      { label: "Requested On", value: requestedOnStr },
-      { label: "Status", value: booking.status === 'Approved' ? "Confirmed" : booking.status }
-    ];
-
-    // Draw Data Rows
-    tableData.forEach((row, index) => {
-      // Zebra striping background fill
-      if (index % 2 === 0) {
-        doc.setFillColor(248, 250, 252); // slate-50 (light blue-grey)
-      } else {
-        doc.setFillColor(255, 255, 255); // pure white
-      }
-      doc.rect(tableX, currentY, tableWidth, rowHeight, 'F');
-      
-      // Draw grid borders
-      doc.setDrawColor(226, 232, 240); // slate-200
-      doc.setLineWidth(0.25);
-      doc.rect(tableX, currentY, tableWidth, rowHeight, 'S');
-      
-      // Draw vertical column divider
-      doc.line(tableX + col1Width, currentY, tableX + col1Width, currentY + rowHeight);
-
-      // Render cells text contents
-      // Column 1 label (Bold Slate-600)
-      doc.setFont("Helvetica", "bold");
-      doc.setTextColor(71, 85, 105);
-      doc.setFontSize(9.5);
-      doc.text(row.label, tableX + 5, currentY + 5.8);
-
-      // Column 2 value (Normal Slate-900 / Styled Status)
-      if (row.label === "Status") {
-        if (row.value === "Confirmed") {
-          doc.setTextColor(22, 163, 74); // green-600 (Confirmed green color)
-        } else {
-          doc.setTextColor(217, 119, 6); // amber-600
-        }
-        doc.setFont("Helvetica", "bold");
-      } else {
-        doc.setFont("Helvetica", "normal");
-        doc.setTextColor(15, 23, 42); // slate-900
-      }
-      doc.text(String(row.value), tableX + col1Width + 5, currentY + 5.8);
-
-      currentY += rowHeight;
-    });
-
-    // (QR Code omitted from PDF receipt per user request)
-
-    // Terms & Notice Footer Box (Moved up to eliminate gap after QR removal)
-    const noticeY = currentY + 15;
-    doc.setDrawColor(226, 232, 240);
-    doc.setFillColor(248, 250, 252);
-    doc.rect(20, noticeY, 170, 30, 'FD');
-    
-    doc.setFont("Helvetica", "bold");
-    doc.setTextColor(154, 85, 255);
-    doc.text("Important Notice:", 25, noticeY + 6);
-    
-    doc.setFont("Helvetica", "normal");
-    doc.setTextColor(100, 116, 139);
-    doc.text("1. Please save this PDF on your device as proof of your booking confirmation.", 25, noticeY + 12);
-    doc.text("2. This is a system-generated receipt. The booking is instantly confirmed and approved.", 25, noticeY + 17);
-    doc.text("3. An automated confirmation email/SMS has been dispatched to the faculty.", 25, noticeY + 22);
-
-    doc.save(`Receipt_${booking.id}.pdf`);
+    await downloadOfficialReceiptPDF(booking, faculties, venues, departments);
   };
 
   useEffect(() => {
