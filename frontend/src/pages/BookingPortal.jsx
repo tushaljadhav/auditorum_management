@@ -52,17 +52,16 @@ export default function BookingPortal() {
     Swal.fire({
       toast: true,
       position: 'top-end',
-      icon: 'success',
       html: `
         <div style="display: flex; align-items: center; gap: 12px; text-align: left;">
-          <div style="width: 32px; height: 32px; border-radius: 50%; background: #ECFDF5; border: 1px solid #A7F3D0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-            <span style="color: #059669; font-size: 16px; font-weight: 900;">✓</span>
+          <div style="width: 34px; height: 34px; border-radius: 50%; background: #ECFDF5; border: 1px solid #A7F3D0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(5, 150, 105, 0.15);">
+            <span style="color: #059669; font-size: 17px; font-weight: 900; line-height: 1;">✓</span>
           </div>
           <div>
-            <div style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #059669;">
+            <div style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #059669;">
               Time Slot Auto-Filled
             </div>
-            <div style="font-size: 0.92rem; font-weight: 800; color: #0F172A; margin-top: 1px;">
+            <div style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin-top: 1px;">
               ${formattedStart} – ${formattedEnd}
             </div>
           </div>
