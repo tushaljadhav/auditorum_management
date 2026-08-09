@@ -11,9 +11,9 @@ const NAV_SECTIONS = [
   {
     title: 'CORE MANAGEMENT',
     links: [
-      { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, badge: true },
-      { name: 'Bookings Log', path: '/admin/bookings', icon: CalendarDays },
+      { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
       { name: 'Venues & Halls', path: '/admin/venues', icon: MapPin },
+      { name: 'Bookings Log', path: '/admin/bookings', icon: CalendarDays },
     ]
   },
   {
