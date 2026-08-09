@@ -915,31 +915,41 @@ export default function BookingPortal() {
                         </div>
 
                         <div className="col-6 col-md-4">
-                          <label className="form-label font-weight-bold text-secondary">Start Time</label>
-                          <div className="input-group">
-                            <span className="input-group-text bg-light border-end-0"><Clock size={18} className="text-muted" /></span>
-                            <input 
-                              type="time" 
-                              className="form-control form-control-lg bg-light border-start-0" 
-                              required
-                              value={availForm.startTime}
-                              onChange={(e) => setAvailForm({ ...availForm, startTime: e.target.value })}
-                            />
+                          <div className="d-flex align-items-center justify-content-between mb-1">
+                            <label className="form-label font-weight-bold text-secondary mb-0">Start Time</label>
+                            {availForm.startTime && (
+                              <span className="badge bg-primary bg-opacity-10 text-primary font-weight-bold" style={{ fontSize: '0.78rem', padding: '3px 8px', borderRadius: '6px' }}>
+                                {formatTime12h(availForm.startTime)}
+                              </span>
+                            )}
                           </div>
+                          <input 
+                            type="time" 
+                            className="form-control form-control-lg bg-light" 
+                            required
+                            value={availForm.startTime}
+                            onChange={(e) => setAvailForm({ ...availForm, startTime: e.target.value })}
+                            style={{ borderRadius: '10px', fontSize: '0.95rem', fontWeight: 600, borderColor: '#CBD5E1' }}
+                          />
                         </div>
 
                         <div className="col-6 col-md-4">
-                          <label className="form-label font-weight-bold text-secondary">End Time</label>
-                          <div className="input-group">
-                            <span className="input-group-text bg-light border-end-0"><Clock size={18} className="text-muted" /></span>
-                            <input 
-                              type="time" 
-                              className="form-control form-control-lg bg-light border-start-0" 
-                              required
-                              value={availForm.endTime}
-                              onChange={(e) => setAvailForm({ ...availForm, endTime: e.target.value })}
-                            />
+                          <div className="d-flex align-items-center justify-content-between mb-1">
+                            <label className="form-label font-weight-bold text-secondary mb-0">End Time</label>
+                            {availForm.endTime && (
+                              <span className="badge bg-primary bg-opacity-10 text-primary font-weight-bold" style={{ fontSize: '0.78rem', padding: '3px 8px', borderRadius: '6px' }}>
+                                {formatTime12h(availForm.endTime)}
+                              </span>
+                            )}
                           </div>
+                          <input 
+                            type="time" 
+                            className="form-control form-control-lg bg-light" 
+                            required
+                            value={availForm.endTime}
+                            onChange={(e) => setAvailForm({ ...availForm, endTime: e.target.value })}
+                            style={{ borderRadius: '10px', fontSize: '0.95rem', fontWeight: 600, borderColor: '#CBD5E1' }}
+                          />
                         </div>
                       </div>
 
@@ -992,7 +1002,7 @@ export default function BookingPortal() {
                                           }}
                                         >
                                           <span className="rounded-circle" style={{ width: '6px', height: '6px', backgroundColor: '#ef4444' }}></span>
-                                          <strong style={{ color: '#b91c1c' }}>{b.startTime} - {b.endTime}</strong>
+                                          <strong style={{ color: '#b91c1c' }}>{formatTime12h(b.startTime)} - {formatTime12h(b.endTime)}</strong>
                                           <span style={{ color: '#ef4444' }}>({b.eventName})</span>
                                         </div>
                                       ))}
@@ -1483,7 +1493,7 @@ export default function BookingPortal() {
                                         </div>
                                         <div className="d-flex align-items-center gap-1.5 text-secondary" style={{ fontSize: '0.78rem', marginTop: '4px' }}>
                                           <Clock size={13} style={{ flexShrink: 0 }} />
-                                          <span>{b.startTime} - {b.endTime}</span>
+                                          <span>{formatTime12h(b.startTime)} - {formatTime12h(b.endTime)}</span>
                                         </div>
                                       </td>
 
@@ -1579,7 +1589,7 @@ export default function BookingPortal() {
                                       <div className="d-flex align-items-center gap-2" style={{ color: '#334155' }}>
                                         <Calendar size={14} style={{ color: '#6366F1', flexShrink: 0 }} />
                                         <span className="font-weight-semibold">{b.bookingDate}</span>
-                                        <span className="text-muted">({b.startTime} - {b.endTime})</span>
+                                        <span className="text-muted">({formatTime12h(b.startTime)} - {formatTime12h(b.endTime)})</span>
                                       </div>
                                       <div className="d-flex align-items-center gap-2" style={{ color: '#334155' }}>
                                         <User size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
@@ -1655,7 +1665,7 @@ export default function BookingPortal() {
                               <strong>Booking Date:</strong> {selectedTrackedBooking.bookingDate}
                             </div>
                             <div className="col-12 col-sm-6">
-                              <strong>Time Schedule:</strong> {selectedTrackedBooking.startTime} - {selectedTrackedBooking.endTime}
+                              <strong>Time Schedule:</strong> {formatTime12h(selectedTrackedBooking.startTime)} - {formatTime12h(selectedTrackedBooking.endTime)}
                             </div>
                             <div className="col-12 col-sm-6">
                               <strong>Faculty Member:</strong> {selectedTrackedBooking.facultyName}
@@ -1729,7 +1739,7 @@ export default function BookingPortal() {
                       </div>
                       <div className="col-6 col-md-4 d-flex align-items-center">
                         <Clock size={16} className="text-primary me-2" />
-                        <span><strong>Time:</strong> {availForm.startTime} - {availForm.endTime}</span>
+                        <span><strong>Time:</strong> {formatTime12h(availForm.startTime)} - {formatTime12h(availForm.endTime)}</span>
                       </div>
                     </div>
                   </div>
