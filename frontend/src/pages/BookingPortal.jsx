@@ -6,7 +6,7 @@ import Footer from '../components/Footer';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import { drawCollegeHeader, downloadOfficialReceiptPDF } from '../utils/pdfHeader';
-import { Calendar, Clock, MapPin, Users, BookOpen, ChevronLeft, ArrowRight, CheckCircle, Search, HelpCircle, PlusCircle, Download, Home, Building2, User, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, BookOpen, ChevronLeft, ChevronRight, ArrowRight, CheckCircle, Search, HelpCircle, PlusCircle, Download, Home, Building2, User, AlertTriangle } from 'lucide-react';
 
 export default function BookingPortal() {
   const navigate = useNavigate();
@@ -34,17 +34,62 @@ export default function BookingPortal() {
     };
   };
   
+  // Time formatting and modern Toast alert helpers
+  const formatTime12h = (timeStr) => {
+    if (!timeStr) return '';
+    const [hStr, mStr] = timeStr.split(':');
+    let h = parseInt(hStr, 10);
+    const m = mStr || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+  };
+
+  const showTimeSetToast = (startTime, endTime) => {
+    const formattedStart = formatTime12h(startTime);
+    const formattedEnd = formatTime12h(endTime);
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      html: `
+        <div style="display: flex; align-items: center; gap: 12px; text-align: left;">
+          <div style="width: 32px; height: 32px; border-radius: 50%; background: #ECFDF5; border: 1px solid #A7F3D0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <span style="color: #059669; font-size: 16px; font-weight: 900;">✓</span>
+          </div>
+          <div>
+            <div style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #059669;">
+              Time Slot Auto-Filled
+            </div>
+            <div style="font-size: 0.92rem; font-weight: 800; color: #0F172A; margin-top: 1px;">
+              ${formattedStart} – ${formattedEnd}
+            </div>
+          </div>
+        </div>
+      `,
+      showConfirmButton: false,
+      timer: 2000,
+      timerProgressBar: true,
+      background: '#FFFFFF',
+      customClass: {
+        popup: 'tailux-toast-popup'
+      }
+    });
+  };
+
   // Step tracker: 1 = Check Availability, 2 = Fill Booking Form, 3 = Confirmation / QR
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Status tracking states
+  // Status tracking & slot pagination states
   const [activeSubTab, setActiveSubTab] = useState('check'); // 'check' or 'track'
   const [trackId, setTrackId] = useState('');
   const [trackedBooking, setTrackedBooking] = useState(null);
   const [trackedResults, setTrackedResults] = useState([]);
   const [selectedTrackedBooking, setSelectedTrackedBooking] = useState(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
+  const [slotCurrentPage, setSlotCurrentPage] = useState(1);
 
   // Database lists
   const [departments, setDepartments] = useState([]);
@@ -477,7 +522,7 @@ export default function BookingPortal() {
       .map(s => ({
         start: toStr(s.start),
         end: toStr(s.end),
-        label: `${toStr(s.start)} - ${toStr(s.end)}`
+        label: `${formatTime12h(toStr(s.start))} - ${formatTime12h(toStr(s.end))}`
       }));
   };
 
@@ -493,6 +538,7 @@ export default function BookingPortal() {
         setDayBookings(bookingsData);
         const freeSlots = calculateFreeSlots(bookingsData, "08:00", "23:00", date);
         setAvailableSlots(freeSlots);
+        setSlotCurrentPage(1);
       }
     } catch (err) {
       console.error("Error fetching day schedule:", err);
@@ -997,16 +1043,9 @@ export default function BookingPortal() {
                                         disabled={!!bookingMatch}
                                         onClick={() => {
                                           setAvailForm(prev => ({ ...prev, startTime: startStr, endTime: endStr }));
-                                          Swal.fire({
-                                            toast: true,
-                                            position: 'top-end',
-                                            icon: 'success',
-                                            title: `Time set: ${startStr} - ${endStr}`,
-                                            showConfirmButton: false,
-                                            timer: 1200
-                                          });
+                                          showTimeSetToast(startStr, endStr);
                                         }}
-                                        title={`${startStr} - ${endStr}: ${statusText}`}
+                                        title={`${formatTime12h(startStr)} - ${formatTime12h(endStr)}: ${statusText}`}
                                         style={{
                                           padding: '8px 2px', borderRadius: 8, border: `1px solid ${border}`,
                                           background: bg, color: color, fontSize: '0.72rem', fontWeight: 700,
@@ -1015,7 +1054,7 @@ export default function BookingPortal() {
                                           alignItems: 'center', gap: 2, minWidth: 46
                                         }}
                                       >
-                                        <span style={{ fontSize: '0.66rem', opacity: 0.85 }}>{startStr}</span>
+                                        <span style={{ fontSize: '0.66rem', opacity: 0.85 }}>{formatTime12h(startStr).replace(':00', '')}</span>
                                         <span style={{ fontSize: '0.65rem' }}>{bookingMatch ? '🔴' : isSelected ? '🔵' : '🟢'}</span>
                                       </button>
                                     );
@@ -1029,11 +1068,17 @@ export default function BookingPortal() {
                                 </div>
                               </div>
 
-                              {/* Available Slots (Free) */}
-                              <div className="p-3 rounded-3 border" style={{ borderColor: '#e8d5ff', backgroundColor: '#f5f7ff' }}>
-                                <span className="text-secondary font-weight-semibold d-block mb-2 text-uppercase" style={{ fontSize: '0.74rem', letterSpacing: '0.5px', color: '#4f46e5' }}>
-                                  Available Slots for Booking (Click to auto-fill time):
-                                </span>
+                              {/* Available Slots (Free) with DataTables Pagination */}
+                              <div className="p-3.5 rounded-3 border" style={{ borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
+                                  <span className="text-secondary font-weight-semibold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '0.5px', color: '#4F46E5' }}>
+                                    Available Slots for Booking (Click to Auto-Fill Time):
+                                  </span>
+                                  <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700 }}>
+                                    Total Free: {availableSlots.length} Slots
+                                  </span>
+                                </div>
+
                                 {availableSlots.length === 0 ? (
                                   <div className="d-flex flex-column gap-2 mb-2">
                                     <div className="text-danger font-weight-semibold" style={{ fontSize: '0.85rem' }}>
@@ -1064,85 +1109,116 @@ export default function BookingPortal() {
                                   </div>
                                 ) : (
                                   <>
-                                    <div 
-                                      style={{ 
-                                        display: 'grid', 
-                                        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 130px), 1fr))', 
-                                        gap: '8px' 
-                                      }}
-                                    >
-                                      {(() => {
-                                        const hasCoreSlots = availableSlots.some(s => {
-                                          const h = parseInt(s.start.split(':')[0]);
-                                          return h >= 10 && h < 18;
-                                        });
-                                        const slotsToDisplay = (showAllTimes || !hasCoreSlots)
-                                          ? availableSlots 
-                                          : availableSlots.filter(s => {
-                                              const h = parseInt(s.start.split(':')[0]);
-                                              return h >= 10 && h < 18;
-                                            });
+                                    {(() => {
+                                      const slotsPerPage = 8;
+                                      const totalPages = Math.ceil(availableSlots.length / slotsPerPage) || 1;
+                                      const currentPage = Math.min(slotCurrentPage, totalPages);
+                                      const paginatedSlots = availableSlots.slice((currentPage - 1) * slotsPerPage, currentPage * slotsPerPage);
 
-                                        return slotsToDisplay.map((slot, idx) => (
-                                          <button
-                                            key={idx}
-                                            type="button"
-                                            className="btn btn-sm btn-outline-primary px-2 py-2 rounded font-weight-semibold d-flex align-items-center justify-content-center gap-1 transition-all shadow-sm border"
+                                      return (
+                                        <>
+                                          <div 
                                             style={{ 
-                                              fontSize: '0.82rem', 
-                                              background: '#ffffff', 
-                                              borderColor: '#c7d2fe', 
-                                              color: '#4f46e5',
-                                              borderRadius: '8px',
-                                              transition: 'all 0.2s ease'
-                                            }}
-                                            onClick={() => {
-                                              setAvailForm(prev => ({
-                                                ...prev,
-                                                startTime: slot.start,
-                                                endTime: slot.end
-                                              }));
-                                              Swal.fire({
-                                                toast: true,
-                                                position: 'top-end',
-                                                icon: 'success',
-                                                title: `Time set: ${slot.label}`,
-                                                showConfirmButton: false,
-                                                timer: 1500
-                                              });
-                                            }}
-                                            onMouseEnter={(e) => {
-                                              e.currentTarget.style.backgroundColor = '#4f46e5';
-                                              e.currentTarget.style.color = '#ffffff';
-                                              e.currentTarget.style.transform = 'translateY(-1.5px)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              e.currentTarget.style.backgroundColor = '#ffffff';
-                                              e.currentTarget.style.color = '#4f46e5';
-                                              e.currentTarget.style.transform = 'translateY(0px)';
+                                              display: 'grid', 
+                                              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 180px), 1fr))', 
+                                              gap: '10px' 
                                             }}
                                           >
-                                            ➕ {slot.label}
-                                          </button>
-                                        ));
-                                      })()}
-                                    </div>
-                                    
-                                    {availableSlots.some(s => {
-                                      const h = parseInt(s.start.split(':')[0]);
-                                      return h < 10 || h >= 18;
-                                    }) && (
-                                      <div className="text-center mt-3 pt-2 border-top" style={{ borderColor: '#f3e8ff' }}>
-                                        <button
-                                          type="button"
-                                          className="btn btn-link text-decoration-none p-0 font-weight-bold"
-                                          style={{ fontSize: '0.82rem', color: '#4f46e5' }}
-                                          onClick={() => setShowAllTimes(!showAllTimes)}
-                                        >
-                                          {showAllTimes ? "👁️ Show Core Hours Only (10 AM - 6 PM)" : `👁️ Show All Slots (${availableSlots.length} available)`}
-                                        </button>
-                                      </div>
-                                    )}
+                                            {paginatedSlots.map((slot, idx) => (
+                                              <button
+                                                key={idx}
+                                                type="button"
+                                                className="btn btn-sm btn-outline-primary px-3 py-2.5 rounded font-weight-bold d-flex align-items-center justify-content-center gap-1.5 transition-all shadow-sm border"
+                                                style={{ 
+                                                  fontSize: '0.84rem', 
+                                                  background: '#FFFFFF', 
+                                                  borderColor: '#C7D2FE', 
+                                                  color: '#4F46E5',
+                                                  borderRadius: '10px',
+                                                  transition: 'all 0.15s ease'
+                                                }}
+                                                onClick={() => {
+                                                  setAvailForm(prev => ({
+                                                    ...prev,
+                                                    startTime: slot.start,
+                                                    endTime: slot.end
+                                                  }));
+                                                  showTimeSetToast(slot.start, slot.end);
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                  e.currentTarget.style.backgroundColor = '#4F46E5';
+                                                  e.currentTarget.style.color = '#FFFFFF';
+                                                  e.currentTarget.style.transform = 'translateY(-1.5px)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                                                  e.currentTarget.style.color = '#4F46E5';
+                                                  e.currentTarget.style.transform = 'translateY(0px)';
+                                                }}
+                                              >
+                                                ➕ {slot.label}
+                                              </button>
+                                            ))}
+                                          </div>
+
+                                          {/* DataTables Style Pagination Controls (< Previous 1 2 Next >) */}
+                                          {availableSlots.length > slotsPerPage && (
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #E2E8F0', paddingTop: 14, marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
+                                              <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
+                                                Showing {((currentPage - 1) * slotsPerPage) + 1} to {Math.min(currentPage * slotsPerPage, availableSlots.length)} of {availableSlots.length} slots
+                                              </div>
+
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <button
+                                                  type="button"
+                                                  disabled={currentPage === 1}
+                                                  onClick={() => setSlotCurrentPage(p => Math.max(1, p - 1))}
+                                                  style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px',
+                                                    borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
+                                                    color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.78rem', fontWeight: 700,
+                                                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                                                  }}
+                                                >
+                                                  <ChevronLeft size={14} /> Previous
+                                                </button>
+
+                                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+                                                  <button
+                                                    key={pageNum}
+                                                    type="button"
+                                                    onClick={() => setSlotCurrentPage(pageNum)}
+                                                    style={{
+                                                      minWidth: 32, height: 32, borderRadius: 8,
+                                                      border: currentPage === pageNum ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                                                      background: currentPage === pageNum ? '#2563EB' : '#FFFFFF',
+                                                      color: currentPage === pageNum ? '#FFFFFF' : '#334155',
+                                                      fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer'
+                                                    }}
+                                                  >
+                                                    {pageNum}
+                                                  </button>
+                                                ))}
+
+                                                <button
+                                                  type="button"
+                                                  disabled={currentPage === totalPages}
+                                                  onClick={() => setSlotCurrentPage(p => Math.min(totalPages, p + 1))}
+                                                  style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px',
+                                                    borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
+                                                    color: currentPage === totalPages ? '#94A3B8' : '#334155', fontSize: '0.78rem', fontWeight: 700,
+                                                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                                                  }}
+                                                >
+                                                  Next <ChevronRight size={14} />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
                                   </>
                                 )}
 
