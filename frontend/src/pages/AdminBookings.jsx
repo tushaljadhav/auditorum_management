@@ -301,17 +301,26 @@ export default function AdminBookings() {
             <div style={{ fontSize: '0.82rem', color: '#64748B', maxWidth: 360 }}>Try adjusting your search keywords or venue dropdown filters.</div>
           </div>
         ) : (
-          <div className="tailux-table-responsive">
-            <table style={{ width: '100%', minWidth: '960px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', minWidth: '1280px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                  {['Event Name', 'Venue / Hall', 'Reservation Date', 'Time Window', 'Faculty Requester', 'Department', 'Actions'].map(h => (
-                    <th key={h} style={{ 
-                      padding: '14px 20px', fontSize: '0.72rem', fontWeight: 750, 
+                  {[
+                    { label: 'Event Name', minWidth: 200 },
+                    { label: 'Venue / Hall', minWidth: 220 },
+                    { label: 'Reservation Date', minWidth: 160 },
+                    { label: 'Time Window', minWidth: 210 },
+                    { label: 'Faculty Requester', minWidth: 210 },
+                    { label: 'Department', minWidth: 220 },
+                    { label: 'Status', minWidth: 130, align: 'center' },
+                    { label: 'Actions', minWidth: 130, align: 'center' },
+                  ].map(h => (
+                    <th key={h.label} style={{ 
+                      padding: '14px 18px', fontSize: '0.72rem', fontWeight: 750, 
                       textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', 
-                      textAlign: h === 'Actions' ? 'center' : 'left', whiteSpace: 'nowrap' 
+                      textAlign: h.align || 'left', whiteSpace: 'nowrap', minWidth: h.minWidth 
                     }}>
-                      {h}
+                      {h.label}
                     </th>
                   ))}
                 </tr>
@@ -328,70 +337,86 @@ export default function AdminBookings() {
                       onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <td style={{ padding: '16px 20px', color: '#0F172A' }}>
-                        <div style={{ fontSize: '0.94rem', fontWeight: 800, color: '#0F172A' }}>
+                      <td style={{ padding: '14px 18px', color: '#0F172A', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0F172A' }}>
                           {b.eventName}
+                        </div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <span style={{ fontSize: '0.7rem', fontFamily: 'monospace', fontWeight: 600, color: '#64748B', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '1px 6px', borderRadius: 4 }}>
+                            ID: #{b.id?.split('_').pop() || b.id}
+                          </span>
+                          <button 
+                            onClick={() => handleCopyId(b.id)}
+                            style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#6366F1' }}
+                            title={`Copy Full ID: ${b.id}`}
+                          >
+                            <Copy size={12} />
+                          </button>
                         </div>
                       </td>
 
-                      <td style={{ padding: '16px 20px', color: '#334155' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: 8, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <Building2 size={15} style={{ color: '#2563EB' }} />
+                      <td style={{ padding: '14px 18px', color: '#334155', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: 6, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Building2 size={14} style={{ color: '#2563EB' }} />
                           </div>
                           <span style={{ fontWeight: 750, color: '#0F172A', fontSize: '0.88rem' }}>{venueName}</span>
                         </div>
                       </td>
 
-                      <td style={{ padding: '16px 20px', color: '#334155', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '14px 18px', color: '#334155', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Calendar size={15} style={{ color: '#6366F1' }} />
+                          <Calendar size={14} style={{ color: '#6366F1' }} />
                           <span style={{ fontWeight: 700, color: '#0F172A' }}>{b.bookingDate}</span>
                         </div>
                       </td>
 
-                      <td style={{ padding: '16px 20px', color: '#334155', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '14px 18px', color: '#334155', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Clock size={15} style={{ color: '#059669' }} />
-                          <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>
+                          <Clock size={14} style={{ color: '#059669' }} />
+                          <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.86rem' }}>
                             {formatTime12h(b.startTime)} – {formatTime12h(b.endTime)}
                           </span>
                         </div>
                       </td>
 
-                      <td style={{ padding: '16px 20px', color: '#0F172A' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#6366F1', color: '#FFFFFF', fontSize: '0.78rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <td style={{ padding: '14px 18px', color: '#0F172A', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#6366F1', color: '#FFFFFF', fontSize: '0.75rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             {facultyName && facultyName !== '—' ? facultyName[0].toUpperCase() : 'F'}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 750, color: '#0F172A', fontSize: '0.88rem' }}>{facultyName}</div>
+                            <div style={{ fontWeight: 750, color: '#0F172A', fontSize: '0.87rem' }}>{facultyName}</div>
                             {fac?.designation && (
-                              <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500, marginTop: 1 }}>{fac.designation}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 500 }}>{fac.designation}</div>
                             )}
                           </div>
                         </div>
                       </td>
 
-                      <td style={{ padding: '16px 20px' }}>
+                      <td style={{ padding: '14px 18px', whiteSpace: 'nowrap' }}>
                         <span style={deptBadge(deptName)}>
                           <Building2 size={12} /> {deptName}
                         </span>
                       </td>
 
-                      <td style={{ padding: '16px 20px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <td style={{ padding: '14px 18px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <StatusBadge status={b.status || 'Approved'} />
+                      </td>
+
+                      <td style={{ padding: '14px 18px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                           <button
                             onClick={() => { setSelectedBookingDetail(b); setDetailModalOpen(true); }}
                             style={{
-                              padding: '6px 12px', borderRadius: 8, background: '#EFF6FF', border: '1px solid #BFDBFE',
-                              color: '#2563EB', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer',
+                              padding: '6px 10px', borderRadius: 8, background: '#EFF6FF', border: '1px solid #BFDBFE',
+                              color: '#2563EB', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
                               display: 'inline-flex', alignItems: 'center', gap: 4, transition: 'all 0.15s ease'
                             }}
                             onMouseEnter={e => e.currentTarget.style.background = '#DBEAFE'}
                             onMouseLeave={e => e.currentTarget.style.background = '#EFF6FF'}
                           >
-                            <Eye size={14} /> View
+                            <Eye size={13} /> View
                           </button>
 
                           <button
@@ -404,7 +429,7 @@ export default function AdminBookings() {
                             onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
                             onMouseLeave={e => e.currentTarget.style.background = '#FEF2F2'}
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
@@ -515,16 +540,7 @@ export default function AdminBookings() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 14 }}>
                 <div style={{ padding: '12px 14px', borderRadius: 12, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
                   <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>Booking ID</div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0F172A', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontFamily: 'monospace' }}>{selectedBookingDetail.id}</span>
-                    <button 
-                      onClick={() => handleCopyId(selectedBookingDetail.id)}
-                      style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: '#2563EB' }}
-                      title="Copy Booking ID"
-                    >
-                      <Copy size={13} />
-                    </button>
-                  </div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#0F172A', marginTop: 2 }}>{selectedBookingDetail.id}</div>
                 </div>
 
                 <div style={{ padding: '12px 14px', borderRadius: 12, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>

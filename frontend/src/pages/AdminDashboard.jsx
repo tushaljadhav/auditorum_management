@@ -415,7 +415,7 @@ export default function AdminDashboard() {
             <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Booking requests submitted by faculty will appear here.</div>
           </div>
         ) : (
-          <div className="tailux-table-responsive">
+          <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>

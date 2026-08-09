@@ -153,8 +153,8 @@ export default function AdminVenues() {
             <div style={{ fontSize: '0.82rem', color: '#64748B' }}>Try adjusting your search criteria or add a new hall.</div>
           </div>
         ) : (
-          <div className="tailux-table-responsive">
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                   {['Venue Name', 'Capacity', 'Location & Address', 'GPS Coordinates & Radius', 'Status', 'Actions'].map(h => (
