@@ -213,7 +213,7 @@ export default function AdminFaculty() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                  {['Faculty Member', 'Department', 'Designation / Title', 'Contact Info', 'Actions'].map(h => (
+                  {['Faculty Member', 'Department', 'Contact Info', 'Actions'].map(h => (
                     <th key={h} style={{ 
                       padding: '12px 18px', fontSize: '0.72rem', fontWeight: 750, 
                       textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', 
@@ -249,10 +249,6 @@ export default function AdminFaculty() {
 
                       <td style={{ padding: '16px 18px' }}>
                         <span style={deptBadge(getDeptName(fac.departmentId))}>{getDeptName(fac.departmentId)}</span>
-                      </td>
-
-                      <td style={{ padding: '16px 18px', color: '#475569', fontWeight: 600 }}>
-                        {getDesigName(fac.designationId) || '—'}
                       </td>
 
                       <td style={{ padding: '16px 18px' }}>
