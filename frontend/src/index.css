@@ -1685,6 +1685,33 @@ img, svg, video, canvas, audio, iframe, embed, object {
   background: #FFFFFF !important;
 }
 
+/* Custom Modern Table Horizontal Scrollbar System */
+.tailux-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.tailux-table-responsive::-webkit-scrollbar {
+  height: 7px;
+}
+
+.tailux-table-responsive::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 8px;
+}
+
+.tailux-table-responsive::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 8px;
+  border: 1px solid #F1F5F9;
+}
+
+.tailux-table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
 /* ============================================================
    END OF STYLES
    ============================================================ */

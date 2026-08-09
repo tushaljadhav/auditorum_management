@@ -218,7 +218,7 @@ export default function AdminFaculty() {
             <div style={{ fontSize: '0.82rem', color: '#64748B' }}>Try adjusting your search criteria or add a new faculty member.</div>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="tailux-table-responsive">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>

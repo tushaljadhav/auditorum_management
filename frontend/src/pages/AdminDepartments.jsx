@@ -162,7 +162,7 @@ export default function AdminDepartments() {
         </div>
 
         {/* DataTables Main HTML Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div className="tailux-table-responsive">
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>

@@ -301,8 +301,8 @@ export default function AdminBookings() {
             <div style={{ fontSize: '0.82rem', color: '#64748B', maxWidth: 360 }}>Try adjusting your search keywords or venue dropdown filters.</div>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <div className="tailux-table-responsive">
+            <table style={{ width: '100%', minWidth: '960px', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
                   {['Event Name', 'Venue / Hall', 'Reservation Date', 'Time Window', 'Faculty Requester', 'Department', 'Actions'].map(h => (
