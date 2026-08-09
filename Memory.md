@@ -21,7 +21,7 @@
 - [x] Implemented **1-Click System Data Backup & Restore Engine** in `AdminLayout.jsx` and `server.js`: Admins can download full JSON database backups and restore system datasets with 1 click.
 - [x] Upgraded **Available Booking Slots** in `BookingPortal.jsx`: Formatted all slot time buttons to proper 12-hour AM/PM format (e.g. `10:00 AM - 11:00 AM`, `01:00 PM - 02:00 PM`).
 - [x] Replaced `Show All Slots` with **DataTables Style Pagination Controls** (`< Previous`, `1`, `2`, `Next >`) for available slots grid in `BookingPortal.jsx`.
-- [x] Overhauled **Admin Bookings Log Table** in `AdminBookings.jsx`: Added 12-hour AM/PM time formatting (e.g. `08:05 PM - 09:05 PM`), initial avatars for Faculty Requester, executive department pills, compact reference ID badges, and complete DataTables pagination controls (`< Previous`, `1`, `Next >`).
+- [x] Simplified **Admin Bookings Log Table** in `AdminBookings.jsx`: Removed `Status` column & row ID subtext to provide spacious (`16px 20px` padding) breathing room across columns; full Booking ID with 1-click copy button is strictly rendered inside the **View Detail Modal**.
 - [x] Pushed complete codebase to official GitHub repository: [https://github.com/tushaljadhav/auditorum_management.git](https://github.com/tushaljadhav/auditorum_management.git) on branch `main`.
 
 ---
