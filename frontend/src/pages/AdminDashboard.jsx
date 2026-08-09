@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays, Clock, Users, MapPin,
   RefreshCw, ArrowRight, CheckCircle,
-  TrendingUp, Building2, ChevronRight
+  TrendingUp, Building2, ChevronRight, ChevronLeft
 } from 'lucide-react';
 
 const STATUS_BADGE = {
@@ -85,6 +85,8 @@ export default function AdminDashboard() {
   const [departments, setDepartments] = useState([]);
   const [faculties, setFaculties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [venuePage, setVenuePage] = useState(1);
+  const [deptPage, setDeptPage] = useState(1);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -194,51 +196,187 @@ export default function AdminDashboard() {
       {/* ─── Middle Section: Analytics Cards ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 20 }}>
 
-        {/* Venue Utilization Widget */}
-        <div className="tailux-card">
-          <div className="tailux-card-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <TrendingUp size={16} style={{ color: '#2563EB' }} />
+        {/* Venue Utilization Widget with DataTables Pagination */}
+        {(() => {
+          const allVenueStats = stats?.venueStats || [];
+          const itemsPerPage = 4;
+          const totalPages = Math.ceil(allVenueStats.length / itemsPerPage) || 1;
+          const currentPage = Math.min(venuePage, totalPages);
+          const paginatedVenueStats = allVenueStats.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+          return (
+            <div className="tailux-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <div className="tailux-card-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <TrendingUp size={16} style={{ color: '#2563EB' }} />
+                    </div>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Venue Utilization</span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>By Booking Count</span>
+                </div>
+
+                <div className="tailux-card-body">
+                  {allVenueStats.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '24px 0', color: '#94A3B8', fontSize: '0.85rem' }}>No venue usage data available</div>
+                  ) : (
+                    paginatedVenueStats.map((v, i) => {
+                      const globalIdx = ((currentPage - 1) * itemsPerPage) + i;
+                      return (
+                        <ProgressBar key={v.id} label={v.name} value={v.count} max={maxVenueCount} color={VENUE_COLORS[globalIdx % VENUE_COLORS.length]} />
+                      );
+                    })
+                  )}
+                </div>
               </div>
-              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Venue Utilization</span>
+
+              {/* DataTables Style Pagination Footer */}
+              {allVenueStats.length > itemsPerPage && (
+                <div style={{ padding: '10px 16px', borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8FAFC', borderRadius: '0 0 16px 16px', flexWrap: 'wrap', gap: 8 }}>
+                  <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
+                    Page {currentPage} of {totalPages} ({allVenueStats.length} venues)
+                  </span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button
+                      onClick={() => setVenuePage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 2, padding: '4px 8px',
+                        borderRadius: 6, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
+                        color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.75rem', fontWeight: 700,
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <ChevronLeft size={13} /> Prev
+                    </button>
+
+                    {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(pNum => (
+                      <button
+                        key={pNum}
+                        onClick={() => setVenuePage(pNum)}
+                        style={{
+                          minWidth: 26, height: 26, borderRadius: 6,
+                          border: currentPage === pNum ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                          background: currentPage === pNum ? '#2563EB' : '#FFFFFF',
+                          color: currentPage === pNum ? '#FFFFFF' : '#334155',
+                          fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer'
+                        }}
+                      >
+                        {pNum}
+                      </button>
+                    ))}
+
+                    <button
+                      onClick={() => setVenuePage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 2, padding: '4px 8px',
+                        borderRadius: 6, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
+                        color: currentPage === totalPages ? '#94A3B8' : '#334155', fontSize: '0.75rem', fontWeight: 700,
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next <ChevronRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>By Booking Count</span>
-          </div>
+          );
+        })()}
 
-          <div className="tailux-card-body">
-            {(stats?.venueStats || []).length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#94A3B8', fontSize: '0.85rem' }}>No venue usage data available</div>
-            ) : (
-              stats.venueStats.map((v, i) => (
-                <ProgressBar key={v.id} label={v.name} value={v.count} max={maxVenueCount} color={VENUE_COLORS[i % VENUE_COLORS.length]} />
-              ))
-            )}
-          </div>
-        </div>
+        {/* Department Activity Widget with DataTables Pagination */}
+        {(() => {
+          const allDeptStats = stats?.deptStats || [];
+          const itemsPerPage = 4;
+          const totalPages = Math.ceil(allDeptStats.length / itemsPerPage) || 1;
+          const currentPage = Math.min(deptPage, totalPages);
+          const paginatedDeptStats = allDeptStats.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-        {/* Department Activity Widget */}
-        <div className="tailux-card">
-          <div className="tailux-card-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: '#F5F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Building2 size={16} style={{ color: '#6366F1' }} />
+          return (
+            <div className="tailux-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <div className="tailux-card-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: '#F5F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Building2 size={16} style={{ color: '#6366F1' }} />
+                    </div>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Department Activity</span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Department Requests</span>
+                </div>
+
+                <div className="tailux-card-body">
+                  {allDeptStats.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '24px 0', color: '#94A3B8', fontSize: '0.85rem' }}>No department activity recorded</div>
+                  ) : (
+                    paginatedDeptStats.map((d, i) => {
+                      const globalIdx = ((currentPage - 1) * itemsPerPage) + i;
+                      return (
+                        <ProgressBar key={d.id} label={d.name} value={d.count} max={maxDeptCount} color={DEPT_COLORS[globalIdx % DEPT_COLORS.length]} />
+                      );
+                    })
+                  )}
+                </div>
               </div>
-              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Department Activity</span>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Department Requests</span>
-          </div>
 
-          <div className="tailux-card-body">
-            {(stats?.deptStats || []).length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#94A3B8', fontSize: '0.85rem' }}>No department activity recorded</div>
-            ) : (
-              stats.deptStats.map((d, i) => (
-                <ProgressBar key={d.id} label={d.name} value={d.count} max={maxDeptCount} color={DEPT_COLORS[i % DEPT_COLORS.length]} />
-              ))
-            )}
-          </div>
-        </div>
+              {/* DataTables Style Pagination Footer */}
+              {allDeptStats.length > itemsPerPage && (
+                <div style={{ padding: '10px 16px', borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8FAFC', borderRadius: '0 0 16px 16px', flexWrap: 'wrap', gap: 8 }}>
+                  <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>
+                    Page {currentPage} of {totalPages} ({allDeptStats.length} depts)
+                  </span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button
+                      onClick={() => setDeptPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 2, padding: '4px 8px',
+                        borderRadius: 6, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
+                        color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.75rem', fontWeight: 700,
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <ChevronLeft size={13} /> Prev
+                    </button>
+
+                    {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(pNum => (
+                      <button
+                        key={pNum}
+                        onClick={() => setDeptPage(pNum)}
+                        style={{
+                          minWidth: 26, height: 26, borderRadius: 6,
+                          border: currentPage === pNum ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                          background: currentPage === pNum ? '#2563EB' : '#FFFFFF',
+                          color: currentPage === pNum ? '#FFFFFF' : '#334155',
+                          fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer'
+                        }}
+                      >
+                        {pNum}
+                      </button>
+                    ))}
+
+                    <button
+                      onClick={() => setDeptPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 2, padding: '4px 8px',
+                        borderRadius: 6, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
+                        color: currentPage === totalPages ? '#94A3B8' : '#334155', fontSize: '0.75rem', fontWeight: 700,
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next <ChevronRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ─── Tailux Recent Activity Table Card ─── */}
