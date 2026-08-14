@@ -17,8 +17,6 @@ import Home from './pages/Home';
 import BookingPortal from './pages/BookingPortal';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
-import AdminDepartments from './pages/AdminDepartments';
-import AdminFaculty from './pages/AdminFaculty';
 import AdminVenues from './pages/AdminVenues';
 import AdminBookings from './pages/AdminBookings';
 import AdminUsers from './pages/AdminUsers';
@@ -50,8 +48,6 @@ export default function App() {
         {/* Protected Admin Routes */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="departments" element={<AdminDepartments />} />
-          <Route path="faculty" element={<AdminFaculty />} />
           <Route path="venues" element={<AdminVenues />} />
           <Route path="bookings" element={<AdminBookings />} />
           <Route path="users" element={<AdminUsers />} />

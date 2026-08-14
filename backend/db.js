@@ -62,7 +62,7 @@ const defaultData = {
       startTime: "14:00",
       endTime: "16:00",
       attendees: 450,
-      status: "Pending",
+      status: "Confirmed",
       attendanceStatus: "CLOSED",
       attendanceWindowStart: null,
       attendanceWindowEnd: null
@@ -225,7 +225,7 @@ const db = {
     const data = readDb();
     const newBooking = { 
       id: `booking_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`, 
-      status: "Pending", // Default status
+      status: "Confirmed", // Instant booking confirmed by default
       attendanceStatus: "CLOSED",
       attendanceWindowStart: null,
       attendanceWindowEnd: null,
@@ -250,6 +250,38 @@ const db = {
     data.bookings = filtered;
     writeDb(data);
     return true;
+  },
+  updateBooking: (id, fields) => {
+    const data = readDb();
+    const idx = data.bookings.findIndex(b => b.id === id);
+    if (idx === -1) return null;
+    data.bookings[idx] = { ...data.bookings[idx], ...fields };
+    writeDb(data);
+    return data.bookings[idx];
+  },
+  addAuditLog: (log) => {
+    const data = readDb();
+    if (!data.auditLogs) data.auditLogs = [];
+    const newLog = { id: `audit_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`, created_at: new Date().toISOString(), ...log };
+    data.auditLogs.push(newLog);
+    writeDb(data);
+    return newLog;
+  },
+  getAuditLogs: () => {
+    const data = readDb();
+    return (data.auditLogs || []).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  },
+  addNotification: (notif) => {
+    const data = readDb();
+    if (!data.notifications) data.notifications = [];
+    const newNotif = { id: `notif_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`, isRead: 0, created_at: new Date().toISOString(), ...notif };
+    data.notifications.push(newNotif);
+    writeDb(data);
+    return newNotif;
+  },
+  getNotifications: () => {
+    const data = readDb();
+    return (data.notifications || []).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   },
   clearAllBookings: () => {
     const data = readDb();
@@ -314,11 +346,13 @@ const db = {
   isSlotAvailable: (venueId, bookingDate, startTime, endTime, excludeBookingId = null) => {
     const data = readDb();
     
-    // Find all approved bookings for the venue on that day
+    // Find all active bookings for the venue on that day
     const dayBookings = data.bookings.filter(b => 
       b.venueId === venueId && 
       b.bookingDate === bookingDate && 
-      b.status === "Approved" &&
+      b.status !== "Cancelled" &&
+      b.status !== "cancelled_by_admin" &&
+      b.status !== "reassigned" &&
       b.id !== excludeBookingId
     );
 

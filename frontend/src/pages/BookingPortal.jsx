@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import CustomSelect from '../components/CustomSelect';
 import Footer from '../components/Footer';
+import { showCustomToast } from '../utils/toast';
+import { exportToExcel } from '../utils/excelExport';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import { drawCollegeHeader, downloadOfficialReceiptPDF } from '../utils/pdfHeader';
-import { Calendar, Clock, MapPin, Users, BookOpen, ChevronLeft, ChevronRight, ArrowRight, CheckCircle, Search, HelpCircle, PlusCircle, Download, Home, Building2, User, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, BookOpen, ChevronLeft, ChevronRight, ArrowRight, CheckCircle, Search, HelpCircle, PlusCircle, Download, Home, Building2, User, AlertTriangle, GraduationCap } from 'lucide-react';
 
 export default function BookingPortal() {
   const navigate = useNavigate();
@@ -49,32 +51,7 @@ export default function BookingPortal() {
   const showTimeSetToast = (startTime, endTime) => {
     const formattedStart = formatTime12h(startTime);
     const formattedEnd = formatTime12h(endTime);
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      html: `
-        <div style="display: flex; align-items: center; gap: 12px; text-align: left;">
-          <div style="width: 34px; height: 34px; border-radius: 50%; background: #ECFDF5; border: 1px solid #A7F3D0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(5, 150, 105, 0.15);">
-            <span style="color: #059669; font-size: 17px; font-weight: 900; line-height: 1;">✓</span>
-          </div>
-          <div>
-            <div style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #059669;">
-              Time Slot Auto-Filled
-            </div>
-            <div style="font-size: 0.95rem; font-weight: 800; color: #0F172A; margin-top: 1px;">
-              ${formattedStart} – ${formattedEnd}
-            </div>
-          </div>
-        </div>
-      `,
-      showConfirmButton: false,
-      timer: 2000,
-      timerProgressBar: true,
-      background: '#FFFFFF',
-      customClass: {
-        popup: 'tailux-toast-popup'
-      }
-    });
+    showCustomToast('Time Slot Auto-Filled', `${formattedStart} – ${formattedEnd}`, 'success');
   };
 
   // Step tracker: 1 = Check Availability, 2 = Fill Booking Form, 3 = Confirmation / QR
@@ -93,7 +70,7 @@ export default function BookingPortal() {
   // Database lists
   const [departments, setDepartments] = useState([]);
   const [faculties, setFaculties] = useState([]);
-  const [filteredFaculties, setFilteredFaculties] = useState([]);
+
   const [venues, setVenues] = useState([]);
 
   // Form states
@@ -106,8 +83,9 @@ export default function BookingPortal() {
 
   const [bookingForm, setBookingForm] = useState({
     eventName: '',
-    departmentId: '',
-    facultyId: '',
+    departmentName: '',
+    facultyName: '',
+    classYear: '',
     eventDescription: '',
     attendees: ''
   });
@@ -144,19 +122,7 @@ export default function BookingPortal() {
       .catch(err => console.error("Error loading venues:", err));
   }, []);
 
-  // Filter faculties when department is selected
-  useEffect(() => {
-    if (bookingForm.departmentId) {
-      const filtered = faculties.filter(f => f.departmentId === bookingForm.departmentId);
-      setFilteredFaculties(filtered);
-      setBookingForm(prev => ({ ...prev, facultyId: '' }));
-    } else {
-      setFilteredFaculties([]);
-    }
-  }, [bookingForm.departmentId, faculties]);
 
-  // Selected faculty contact info
-  const selectedFaculty = faculties.find(f => f.id === bookingForm.facultyId);
 
   const fetchAttendanceList = async (bookingId) => {
     try {
@@ -225,33 +191,25 @@ export default function BookingPortal() {
     }
 
     const headers = ["Roll Number", "Student Name", "Class/Stream", "Latitude", "Longitude", "Distance from Venue (m)", "Check-in Time"];
-    const csvRows = [
-      headers.join(','),
-      ...list.map(a => [
-        `"${a.rollNumber}"`,
-        `"${a.studentName}"`,
-        `"${a.classStream || ''}"`,
-        a.latitude,
-        a.longitude,
-        a.distanceFromVenue,
-        `"${new Date(a.checkInTime).toLocaleString()}"`
-      ].join(','))
-    ];
+    const rows = list.map(a => [
+      a.rollNumber || '—',
+      a.studentName || '—',
+      a.classStream || '—',
+      a.latitude || '',
+      a.longitude || '',
+      `${a.distanceFromVenue || 0}m`,
+      new Date(a.checkInTime).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
+    ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Attendance_${eventName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const filename = `Attendance_${(eventName || 'Event').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xls`;
+    exportToExcel(filename, 'Attendance Roster', headers, rows);
+    showCustomToast('Excel File Exported!', 'Formatted spreadsheet with header row downloaded', 'success');
   };
 
   // Poll attendance list when session is OPEN
   useEffect(() => {
     let interval = null;
-    if (trackedBooking && trackedBooking.status === 'Approved' && trackedBooking.attendanceStatus === 'OPEN') {
+    if (trackedBooking && (trackedBooking.status === 'Approved' || trackedBooking.status === 'Confirmed') && trackedBooking.attendanceStatus === 'OPEN') {
       fetchAttendanceList(trackedBooking.id);
       interval = setInterval(() => {
         fetchAttendanceList(trackedBooking.id);
@@ -326,16 +284,14 @@ export default function BookingPortal() {
         const fList = fRes.ok ? await fRes.json() : [];
 
         const enrichedList = bookingsList.map(b => {
-          const fac = fList.find(f => f.id === b.facultyId);
-          const dept = dList.find(d => d.id === b.departmentId);
           const venue = vList.find(v => v.id === b.venueId);
           return {
             ...b,
             venueName: venue?.name || b.venueName || 'Unknown Venue',
-            deptName: dept?.name || b.deptName || 'Unknown Department',
-            facultyName: fac?.name || b.facultyName || 'Unknown Faculty',
-            facultyEmail: fac?.email || '',
-            facultyMobile: fac?.mobile || ''
+            deptName: b.departmentName || b.deptName || 'Unknown Department',
+            facultyName: b.facultyName || 'Unknown Faculty',
+            facultyEmail: b.email || '',
+            facultyMobile: b.phone || ''
           };
         });
 
@@ -706,14 +662,22 @@ export default function BookingPortal() {
   const handleSubmitBooking = async (e) => {
     e.preventDefault();
 
-    if (!bookingForm.eventName || !bookingForm.departmentId || !bookingForm.facultyId || !bookingForm.attendees) {
+    const deptVal = (bookingForm.departmentName || '').trim();
+    const facVal = (bookingForm.facultyName || '').trim();
+
+    if (!bookingForm.eventName || !deptVal || !facVal || !bookingForm.attendees) {
       Swal.fire({ icon: 'warning', title: 'Required Fields', text: 'Please fill in all event details.' });
       return;
     }
 
     const payload = {
       ...availForm,
-      ...bookingForm,
+      eventName: bookingForm.eventName,
+      departmentName: deptVal,
+      facultyName: facVal,
+      classYear: bookingForm.classYear || '',
+      eventDescription: bookingForm.eventDescription,
+      coordinator: facVal,
       attendees: Number(bookingForm.attendees)
     };
 
@@ -732,7 +696,7 @@ export default function BookingPortal() {
         const result = await response.json();
         setBookingResult(result);
         setStep(3);
-        Swal.fire({ icon: 'success', title: 'Booking Submitted!', text: 'Your request has been successfully queued for approval.', timer: 2500, showConfirmButton: false });
+        Swal.fire({ icon: 'success', title: 'Booking Confirmed!', text: 'Your venue reservation is instantly confirmed and ready!', timer: 2500, showConfirmButton: false });
       } else {
         const errData = await response.json();
         Swal.fire({ icon: 'error', title: 'Booking Conflict', text: errData.error || 'Failed to save booking.' });
@@ -744,7 +708,6 @@ export default function BookingPortal() {
   };
 
   const selectedVenue = venues.find(v => v.id === availForm.venueId);
-  const selectedDept = departments.find(d => d.id === bookingForm.departmentId);
 
   // QR Code Content - Generates a web tracking link that opens on mobile when scanned
   const qrString = bookingResult 
@@ -1102,14 +1065,7 @@ export default function BookingPortal() {
                                           tom.setDate(tom.getDate() + 1);
                                           const tomStr = tom.toISOString().split('T')[0];
                                           setAvailForm(prev => ({ ...prev, bookingDate: tomStr }));
-                                          Swal.fire({
-                                            toast: true,
-                                            position: 'top-end',
-                                            icon: 'info',
-                                            title: `Switched to Tomorrow's Date (${tomStr})`,
-                                            showConfirmButton: false,
-                                            timer: 1500
-                                          });
+                                          showCustomToast('Switched to Tomorrow\'s Date', tomStr, 'info');
                                         }}
                                       >
                                         📅 View Tomorrow's Available Slots
@@ -1644,10 +1600,10 @@ export default function BookingPortal() {
                           <div className="d-flex justify-content-between align-items-center border-bottom pb-2.5 mb-3 flex-wrap gap-2">
                             <h5 className="font-weight-bold text-primary mb-0" style={{ fontSize: '1.2rem' }}>{selectedTrackedBooking.eventName}</h5>
                             <span className={`badge px-3 py-2 rounded-pill font-weight-bold ${
-                              selectedTrackedBooking.status === 'Approved' ? 'bg-success text-white' :
-                              selectedTrackedBooking.status === 'Rejected' ? 'bg-danger text-white' : 'bg-warning text-dark'
+                              (selectedTrackedBooking.status === 'Approved' || selectedTrackedBooking.status === 'Confirmed') ? 'bg-success text-white' :
+                              (selectedTrackedBooking.status === 'Cancelled' || selectedTrackedBooking.status === 'cancelled_by_admin') ? 'bg-danger text-white' : 'bg-warning text-dark'
                             }`} style={{ fontSize: '0.85rem' }}>
-                              {selectedTrackedBooking.status === 'Approved' ? 'Confirmed' : selectedTrackedBooking.status}
+                              {(selectedTrackedBooking.status === 'Approved' || selectedTrackedBooking.status === 'Confirmed') ? 'Confirmed' : selectedTrackedBooking.status}
                             </span>
                           </div>
 
@@ -1693,14 +1649,7 @@ export default function BookingPortal() {
                               className="btn btn-outline-primary font-weight-bold d-flex align-items-center gap-2 px-3 py-2 rounded-3"
                               onClick={() => {
                                 navigator.clipboard.writeText(selectedTrackedBooking.id);
-                                Swal.fire({
-                                  toast: true,
-                                  position: 'top-end',
-                                  icon: 'success',
-                                  title: 'Booking ID copied to clipboard!',
-                                  showConfirmButton: false,
-                                  timer: 1500
-                                });
+                                showCustomToast('Booking ID copied to clipboard!', selectedTrackedBooking.id, 'success');
                               }}
                             >
                               📋 Copy Booking ID
@@ -1761,35 +1710,49 @@ export default function BookingPortal() {
                     </div>
 
                     <div className="col-12 col-md-6">
-                      <label className="form-label font-weight-bold text-secondary">Department</label>
-                      <CustomSelect 
-                        value={bookingForm.departmentId}
-                        onChange={(val) => setBookingForm({ ...bookingForm, departmentId: val })}
-                        options={departments.map(d => ({ value: d.id, label: d.name }))}
-                        placeholder="Select Department..."
-                      />
+                      <label className="form-label font-weight-bold text-secondary">Department Name</label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-light border-end-0"><Building2 size={18} className="text-muted" /></span>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg bg-light border-start-0" 
+                          required
+                          placeholder="e.g. Information Technology"
+                          value={bookingForm.departmentName}
+                          onChange={(e) => setBookingForm({ ...bookingForm, departmentName: e.target.value })}
+                        />
+                      </div>
                     </div>
 
                     <div className="col-12 col-md-6">
-                      <label className="form-label font-weight-bold text-secondary">Faculty</label>
-                      <CustomSelect 
-                        value={bookingForm.facultyId}
-                        onChange={(val) => setBookingForm({ ...bookingForm, facultyId: val })}
-                        options={filteredFaculties.map(f => ({ value: f.id, label: `${f.designationName ? `${f.designationName} ` : ''}${f.name}` }))}
-                        placeholder="Select Faculty..."
-                        disabled={!bookingForm.departmentId}
-                      />
+                      <label className="form-label font-weight-bold text-secondary">Faculty / Coordinator Name</label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-light border-end-0"><User size={18} className="text-muted" /></span>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg bg-light border-start-0" 
+                          required
+                          placeholder="e.g. Dr. A. P. Sharma"
+                          value={bookingForm.facultyName}
+                          onChange={(e) => setBookingForm({ ...bookingForm, facultyName: e.target.value })}
+                        />
+                      </div>
                     </div>
 
-                    {/* Faculty Contact details (Read-only) */}
-                    {selectedFaculty && (
-                      <div className="col-12 animate-fade-in">
-                        <div className="p-3 rounded bg-light border d-flex justify-content-between flex-wrap gap-2 text-secondary" style={{ fontSize: '0.9rem' }}>
-                          <span><strong>Email:</strong> {selectedFaculty.email}</span>
-                          <span><strong>Mobile:</strong> {selectedFaculty.mobile ? (selectedFaculty.mobile.trim().startsWith('+') ? selectedFaculty.mobile : `+91 ${selectedFaculty.mobile}`) : ''}</span>
-                        </div>
+                    <div className="col-12 col-md-6">
+                      <label className="form-label font-weight-bold text-secondary">Class / Year</label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-light border-end-0"><GraduationCap size={18} className="text-muted" /></span>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-lg bg-light border-start-0" 
+                          required
+                          placeholder="e.g. FY, SY, TY, 11th, 12th"
+                          value={bookingForm.classYear}
+                          onChange={(e) => setBookingForm({ ...bookingForm, classYear: e.target.value })}
+                        />
                       </div>
-                    )}
+                    </div>
 
                     <div className="col-12 col-md-6">
                       <label className="form-label font-weight-bold text-secondary">Number of Attendees</label>
@@ -1897,7 +1860,7 @@ export default function BookingPortal() {
                   <img id="college-logo-img" src="/Logo.png" style={{ display: 'none' }} alt="college-logo" />
                   <CheckCircle size={60} className="text-success mb-3" />
                   <h1 className="font-weight-bold text-success mb-1">Booking Confirmed!</h1>
-                  <p className="text-muted">Your booking has been successfully confirmed and approved.</p>
+                  <p className="text-muted">Your booking has been instantly confirmed and registered.</p>
 
                   {/* Details block (Centered Datatable Card) */}
                   <div className="d-flex justify-content-center my-4 mx-2 animate-fade-in">
@@ -1927,7 +1890,7 @@ export default function BookingPortal() {
                           <tbody>
                             <tr>
                               <td className="bg-light font-weight-bold text-secondary border-end" style={{ width: '160px', padding: '12px 16px' }}>Faculty</td>
-                              <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>{selectedFaculty?.name}</td>
+                              <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>{bookingResult.facultyName || bookingForm.facultyName}</td>
                             </tr>
                             <tr>
                               <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Event Name</td>
@@ -1956,11 +1919,21 @@ export default function BookingPortal() {
                             <tr>
                               <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Department</td>
                               <td style={{ padding: '12px 16px' }}>
-                                <span style={getDeptBadgeStyle(selectedDept?.name)}>
-                                  {selectedDept?.name}
+                                <span style={getDeptBadgeStyle(bookingResult.departmentName || bookingForm.departmentName)}>
+                                  {bookingResult.departmentName || bookingForm.departmentName}
                                 </span>
                               </td>
                             </tr>
+                            {(bookingResult.classYear || bookingForm.classYear) && (
+                              <tr>
+                                <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Class / Year</td>
+                                <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>
+                                  <span style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', fontWeight: 700, padding: '4px 10px', borderRadius: '6px', fontSize: '0.82rem', display: 'inline-block' }}>
+                                    {bookingResult.classYear || bookingForm.classYear}
+                                  </span>
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -2000,7 +1973,7 @@ export default function BookingPortal() {
                         // Reset booking flow
                         setStep(1);
                         setAvailForm({ venueId: '', bookingDate: '', startTime: '', endTime: '' });
-                        setBookingForm({ eventName: '', departmentId: '', facultyId: '', eventDescription: '', attendees: '' });
+                        setBookingForm({ eventName: '', departmentName: '', facultyName: '', classYear: '', eventDescription: '', attendees: '' });
                         setBookingResult(null);
                       }}
                       onMouseEnter={(e) => {

@@ -91,11 +91,12 @@ app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
       count: bookings.filter(b => b.venueId === v.id).length
     }));
 
-    // Department activity
-    const deptStats = departments.map(d => ({
-      id: d.id,
-      name: d.name,
-      count: bookings.filter(b => b.departmentId === d.id).length
+    // Department activity (group by stored department name text)
+    const deptNameSet = [...new Set(bookings.map(b => b.departmentName).filter(Boolean))];
+    const deptStats = deptNameSet.map(name => ({
+      id: name,
+      name: name,
+      count: bookings.filter(b => b.departmentName === name).length
     }));
 
     res.json({
@@ -365,8 +366,8 @@ app.get('/api/bookings/:id', async (req, res) => {
       venueLongitude: venues.find(v => v.id === booking.venueId)?.longitude || null,
       venueRadius: venues.find(v => v.id === booking.venueId)?.radius || 50,
       venueAddress: venues.find(v => v.id === booking.venueId)?.address || '',
-      deptName: departments.find(d => d.id === booking.departmentId)?.name || 'Unknown Department',
-      facultyName: faculty.find(f => f.id === booking.facultyId)?.name || 'Unknown Faculty'
+      deptName: booking.departmentName || 'Unknown Department',
+      facultyName: booking.facultyName || 'Unknown Faculty'
     };
     
     res.json(enrichedBooking);
@@ -534,11 +535,15 @@ app.post('/api/bookings/check-availability', async (req, res) => {
 
 app.post('/api/bookings', async (req, res) => {
   const { 
-    eventName, departmentId, facultyId, venueId, 
-    eventDescription, bookingDate, startTime, endTime, attendees 
+    eventName, departmentName, facultyName, venueId, 
+    eventDescription, bookingDate, startTime, endTime, attendees, coordinator: reqCoord, email: reqEmail, phone: reqPhone,
+    classYear
   } = req.body;
   
-  if (!eventName || !departmentId || !facultyId || !venueId || !bookingDate || !startTime || !endTime) {
+  const finalDept = (departmentName || '').trim();
+  const finalFac = (facultyName || reqCoord || '').trim();
+
+  if (!eventName || !finalDept || !finalFac || !venueId || !bookingDate || !startTime || !endTime) {
     return res.status(400).json({ error: 'Missing required booking details.' });
   }
   
@@ -566,18 +571,15 @@ app.post('/api/bookings', async (req, res) => {
     if (!isAvailable) {
       return res.status(409).json({ error: 'The selected time slot is already booked.' });
     }
-    
-    // Fetch faculty info to format coordinator details automatically
-    const faculty = await dbMysql.getFaculty();
-    const facObj = faculty.find(f => f.id === facultyId);
-    const coordinator = facObj ? `${facObj.designationName || ''} ${facObj.name}`.trim() : 'Faculty Coordinator';
-    const email = facObj ? facObj.email : '';
-    const phone = facObj ? facObj.mobile : '';
+
+    const coordinator = reqCoord || finalFac;
+    const email = reqEmail || '';
+    const phone = reqPhone || '';
 
     const newBooking = await dbMysql.addBooking({
       eventName,
-      departmentId,
-      facultyId,
+      departmentName: finalDept,
+      facultyName: finalFac,
       venueId,
       eventDescription,
       bookingDate,
@@ -586,7 +588,8 @@ app.post('/api/bookings', async (req, res) => {
       attendees: Number(attendees) || 0,
       coordinator,
       email,
-      phone
+      phone,
+      classYear: (classYear || '').trim()
     });
     
     res.status(201).json(newBooking);
@@ -616,6 +619,154 @@ app.patch('/api/bookings/:id/status', requireAuth, async (req, res) => {
     
     const updated = await dbMysql.updateBookingStatus(req.params.id, status);
     res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Admin Booking Override API (Requirement 1, 2, 3, 4, 5, 6, 8) ---
+app.patch('/api/bookings/:id/override', requireAuth, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { action, reason, newDetails } = req.body;
+
+    // 1. Permission Gating Check
+    if (!req.session || !req.session.userId) {
+      return res.status(401).json({ error: 'Unauthorized. Login required.' });
+    }
+    const users = await dbMysql.getUsers();
+    const currentUser = users.find(u => u.id === req.session.userId);
+    if (!currentUser) {
+      return res.status(403).json({ error: 'Forbidden. Admin role required for booking override.' });
+    }
+
+    // 2. Mandatory Validations
+    if (!action || !['cancel', 'reassign', 'reschedule'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action type. Must be cancel, reassign, or reschedule.' });
+    }
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'A mandatory justification reason is required for admin override.' });
+    }
+
+    // 3. Target Booking Lookup
+    const bookings = await dbMysql.getBookings();
+    const targetBooking = bookings.find(b => b.id === bookingId);
+    if (!targetBooking) {
+      return res.status(404).json({ error: 'Booking record not found.' });
+    }
+
+    const previousSnapshot = JSON.stringify(targetBooking);
+    let updatedBooking = null;
+    let notificationTitle = '';
+    let notificationMsg = '';
+
+    const adminId = req.session.userId;
+    const adminName = req.session.name || 'System Admin';
+
+    // 4. Handle Action Types
+    if (action === 'cancel') {
+      updatedBooking = await dbMysql.updateBooking(bookingId, {
+        status: 'cancelled_by_admin',
+        attendanceStatus: 'CLOSED'
+      });
+
+      notificationTitle = `Booking Cancelled by Admin: ${targetBooking.eventName}`;
+      notificationMsg = `Your auditorium booking "${targetBooking.eventName}" on ${targetBooking.bookingDate} (${targetBooking.startTime} - ${targetBooking.endTime}) was cancelled by Administrator. Reason: "${reason.trim()}".`;
+    } 
+    else if (action === 'reassign') {
+      if (!newDetails || !newDetails.eventName || !newDetails.eventName.trim()) {
+        return res.status(400).json({ error: 'New event name is required for reassigning.' });
+      }
+
+      updatedBooking = await dbMysql.updateBooking(bookingId, {
+        eventName: newDetails.eventName.trim(),
+        coordinator: (newDetails.bookedBy || newDetails.coordinator || 'Admin Priority Requester').trim(),
+        departmentName: newDetails.departmentName || targetBooking.departmentName || '',
+        facultyName: newDetails.facultyName || targetBooking.facultyName || '',
+        eventDescription: newDetails.eventDescription || targetBooking.eventDescription || '',
+        attendees: newDetails.attendees !== undefined ? Number(newDetails.attendees) : targetBooking.attendees,
+        email: targetBooking.email || '',
+        phone: targetBooking.phone || '',
+        status: 'reassigned'
+      });
+
+      notificationTitle = `Booking Reassigned by Admin: ${targetBooking.eventName}`;
+      notificationMsg = `Your auditorium booking "${targetBooking.eventName}" on ${targetBooking.bookingDate} was reassigned to priority event "${newDetails.eventName}" by Administrator. Reason: "${reason.trim()}".`;
+    } 
+    else if (action === 'reschedule') {
+      if (!newDetails || !newDetails.bookingDate || !newDetails.startTime || !newDetails.endTime) {
+        return res.status(400).json({ error: 'New booking date, start time, and end time are required for rescheduling.' });
+      }
+
+      // Check slot availability for new date/time
+      const isAvailable = await dbMysql.isSlotAvailable(targetBooking.venueId, newDetails.bookingDate, newDetails.startTime, newDetails.endTime, bookingId);
+      if (!isAvailable) {
+        return res.status(409).json({ error: 'Target slot conflicts with an existing booking at this venue.' });
+      }
+
+      updatedBooking = await dbMysql.updateBooking(bookingId, {
+        bookingDate: newDetails.bookingDate,
+        startTime: newDetails.startTime,
+        endTime: newDetails.endTime,
+        status: 'rescheduled'
+      });
+
+      notificationTitle = `Booking Rescheduled by Admin: ${targetBooking.eventName}`;
+      notificationMsg = `Your auditorium booking "${targetBooking.eventName}" has been rescheduled by Administrator to ${newDetails.bookingDate} (${newDetails.startTime} - ${newDetails.endTime}). Reason: "${reason.trim()}".`;
+    }
+
+    const newSnapshot = JSON.stringify(updatedBooking);
+
+    // 5. Insert Audit Trail Record (Requirement 4)
+    const auditLogEntry = await dbMysql.addAuditLog({
+      booking_id: bookingId,
+      admin_id: adminId,
+      admin_name: adminName,
+      action_type: action,
+      reason: reason.trim(),
+      previous_booking_snapshot: previousSnapshot,
+      new_booking_snapshot: newSnapshot
+    });
+
+    // 6. Create Notification (Requirement 6)
+    const notificationEntry = await dbMysql.addNotification({
+      recipientId: targetBooking.coordinator || targetBooking.facultyName || targetBooking.departmentName,
+      recipientEmail: targetBooking.email || '',
+      title: notificationTitle,
+      message: notificationMsg,
+      reason: reason.trim(),
+      type: `${action}_override`,
+      bookingId: bookingId
+    });
+
+    res.json({
+      success: true,
+      message: `Booking ${action}ed successfully by Admin override.`,
+      booking: updatedBooking,
+      auditLog: auditLogEntry,
+      notification: notificationEntry
+    });
+  } catch (err) {
+    console.error('Error processing admin override:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/audit-logs
+app.get('/api/admin/audit-logs', requireAuth, async (req, res) => {
+  try {
+    const logs = await dbMysql.getAuditLogs();
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/notifications
+app.get('/api/notifications', async (req, res) => {
+  try {
+    const list = await dbMysql.getNotifications();
+    res.json(list);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -722,8 +873,8 @@ app.post('/api/bookings/:id/start-attendance', async (req, res) => {
     if (!booking) {
       return res.status(404).json({ error: 'Booking not found' });
     }
-    if (booking.status !== 'Approved') {
-      return res.status(400).json({ error: 'Cannot start attendance for unapproved bookings.' });
+    if (booking.status !== 'Approved' && booking.status !== 'Confirmed') {
+      return res.status(400).json({ error: 'Cannot start attendance for cancelled bookings.' });
     }
 
     const updatedBooking = await dbMysql.startAttendance(req.params.id, Number(windowMins || 15));
@@ -774,9 +925,9 @@ app.post('/api/attendance/mark', async (req, res) => {
       return res.status(404).json({ error: 'Booking ID not found.' });
     }
 
-    // 2. Verify the booking is approved
-    if (booking.status !== 'Approved') {
-      return res.status(400).json({ error: 'Attendance can only be marked for approved events.' });
+    // 2. Verify the booking is active/confirmed
+    if (booking.status !== 'Approved' && booking.status !== 'Confirmed') {
+      return res.status(400).json({ error: 'Attendance can only be marked for confirmed events.' });
     }
 
     // Check if window is expired and auto-close if so

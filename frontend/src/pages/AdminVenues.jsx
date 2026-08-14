@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
+import { showCustomToast } from '../utils/toast';
 import { Plus, Edit2, Trash2, X, Users, MapPin, Navigation, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const S = {
@@ -55,7 +56,7 @@ export default function AdminVenues() {
         try { const gr = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`); if (gr.ok) { const gd = await gr.json(); addr = gd.display_name || ''; } } catch {}
         setForm(p => ({ ...p, latitude: lat.toString(), longitude: lon.toString(), address: addr || p.address }));
         setFetchingGps(false);
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: addr ? 'Location & address captured!' : 'Coordinates captured!', showConfirmButton: false, timer: 2500 });
+        showCustomToast(addr ? 'Location & address captured!' : 'Coordinates captured!', '', 'success');
       },
       (err) => { setFetchingGps(false); Swal.fire({ icon: 'error', title: 'Location Error', text: err.code === 1 ? 'Permission denied.' : 'Failed to capture GPS coordinates.' }); },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }

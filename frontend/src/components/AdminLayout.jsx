@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, Outlet, useLocation } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { showCustomToast } from '../utils/toast';
 import {
   LayoutDashboard, Building2, Users, MapPin, CalendarDays,
   UserCheck, LogOut, Menu, X, ChevronDown, ChevronRight,
@@ -17,10 +18,8 @@ const NAV_SECTIONS = [
     ]
   },
   {
-    title: 'ORGANIZATION & USERS',
+    title: 'SYSTEM USERS',
     links: [
-      { name: 'Departments', path: '/admin/departments', icon: Building2 },
-      { name: 'Faculty Profiles', path: '/admin/faculty', icon: Users },
       { name: 'Admin Users', path: '/admin/users', icon: UserCheck },
     ]
   }
@@ -43,14 +42,7 @@ export default function AdminLayout() {
 
   const handleDownloadBackup = () => {
     window.location.href = '/api/admin/backup';
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: 'success',
-      title: 'Database Backup Downloaded!',
-      showConfirmButton: false,
-      timer: 2000
-    });
+    showCustomToast('Database Backup Downloaded!', 'JSON backup file exported', 'success');
   };
 
   const handleFileSelect = (e) => {

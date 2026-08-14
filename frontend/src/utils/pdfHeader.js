@@ -199,6 +199,28 @@ function drawFieldIcon(ctx, iconType, cx, cy) {
     ctx.beginPath();
     ctx.rect(cx - 3, cy + 3, 6, 8);
     ctx.stroke();
+  } else if (iconType === 'graduation' || iconType === 'graduation-cap') {
+    // Class / Year - Mortarboard & Tassel
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 8);
+    ctx.lineTo(cx + 12, cy - 2);
+    ctx.lineTo(cx, cy + 4);
+    ctx.lineTo(cx - 12, cy - 2);
+    ctx.closePath();
+    ctx.stroke();
+    // Cap headband/cap base
+    ctx.beginPath();
+    ctx.moveTo(cx - 7, cy + 1);
+    ctx.lineTo(cx - 7, cy + 6);
+    ctx.quadraticCurveTo(cx, cy + 11, cx + 7, cy + 6);
+    ctx.lineTo(cx + 7, cy + 1);
+    ctx.stroke();
+    // Tassel hanging to right
+    ctx.beginPath();
+    ctx.moveTo(cx + 8, cy - 1);
+    ctx.lineTo(cx + 11, cy + 6);
+    ctx.stroke();
+    ctx.fillRect(cx + 9.5, cy + 6, 3, 3);
   } else if (iconType === 'send') {
     // Requested On
     ctx.beginPath();
@@ -217,6 +239,11 @@ function drawFieldIcon(ctx, iconType, cx, cy) {
     ctx.moveTo(cx - 5, cy);
     ctx.lineTo(cx - 1, cy + 4);
     ctx.lineTo(cx + 5, cy - 4);
+    ctx.stroke();
+  } else {
+    // Default fallback icon
+    ctx.beginPath();
+    ctx.arc(cx, cy, 8, 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -377,12 +404,12 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
 
   // ── 5. BOOKING DETAILS TABLE ──
   const tableX = 90;
-  const tableY = 565;
+  const tableY = 550;
   const tableW = 1420;
   const col1W = 560; // 40%
   const col2W = 860; // 60%
-  const headerH = 68;
-  const rowH = 115;
+  const headerH = 64;
+  const rowH = 106;
 
   // Solid Navy Table Header
   ctx.fillStyle = '#123A8C';
@@ -393,12 +420,13 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
   ctx.textAlign = 'center';
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '800 24px "DM Sans", sans-serif';
-  ctx.fillText('BOOKING DETAILS', W / 2, tableY + 44);
+  ctx.fillText('BOOKING DETAILS', W / 2, tableY + 42);
 
   // Table Body Rows Data
-  const facultyName = booking?.facultyName || faculties.find(f => f.id === booking?.facultyId)?.name || 'N/A';
+  const facultyName = booking?.facultyName || (booking?.facultyId && faculties.find(f => f.id === booking?.facultyId)?.name) || booking?.coordinator || 'N/A';
   const venueName = booking?.venueName || venues.find(v => v.id === booking?.venueId)?.name || 'N/A';
-  const deptName = booking?.departmentName || departments.find(d => d.id === booking?.departmentId)?.name || 'N/A';
+  const deptName = booking?.departmentName || booking?.deptName || (booking?.departmentId && departments.find(d => d.id === booking?.departmentId)?.name) || 'N/A';
+  const classYearVal = booking?.classYear || booking?.className || '';
   const timeSlotStr = (booking?.startTime && booking?.endTime) 
     ? `${formatTime12h(booking.startTime)} - ${formatTime12h(booking.endTime)}` 
     : (booking?.timeSlot || 'N/A');
@@ -414,6 +442,7 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
     { icon: 'calendar', label: 'Booking Date', value: booking?.bookingDate || 'N/A' },
     { icon: 'clock', label: 'Time Slot', value: timeSlotStr },
     { icon: 'building', label: 'Department', value: deptName },
+    ...(classYearVal ? [{ icon: 'graduation', label: 'Class / Year', value: classYearVal }] : []),
     { icon: 'send', label: 'Requested On', value: reqOnStr },
     { icon: 'check-circle', label: 'Booking Status', value: statusStr, isStatus: true }
   ];
@@ -454,7 +483,7 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
 
     // ── Column 1: Circular Icon Badge + Label ──
     const badgeCx = tableX + 50;
-    const badgeCy = currentY + 57;
+    const badgeCy = currentY + (rowH / 2);
 
     // Circle Badge background
     ctx.fillStyle = (i % 2 === 0) ? '#EEF4FF' : '#FFFFFF';
@@ -471,8 +500,8 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
     // Label Text
     ctx.textAlign = 'left';
     ctx.fillStyle = '#123A8C';
-    ctx.font = '600 21.5px "DM Sans", sans-serif';
-    ctx.fillText(row.label, tableX + 95, currentY + 65);
+    ctx.font = '600 21px "DM Sans", sans-serif';
+    ctx.fillText(row.label, tableX + 95, currentY + (rowH / 2) + 7);
 
     // ── Column 2: Details / Values ──
     const valX = tableX + col1W + 40;
@@ -496,30 +525,34 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
         iconSymbol = '✕';
       }
 
+      const pillH = 46;
+      const pillW = 210;
+      const pillY = currentY + (rowH - pillH) / 2;
+
       ctx.fillStyle = pillBg;
       ctx.strokeStyle = pillBorder;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(valX, currentY + 32, 210, 50, 25);
+      ctx.roundRect(valX, pillY, pillW, pillH, pillH / 2);
       ctx.fill();
       ctx.stroke();
 
       ctx.textAlign = 'center';
       ctx.fillStyle = pillText;
       ctx.font = 'bold 21px "DM Sans", sans-serif';
-      ctx.fillText(`${iconSymbol}  ${row.value}`, valX + 105, currentY + 64);
+      ctx.fillText(`${iconSymbol}  ${row.value}`, valX + (pillW / 2), pillY + 30);
     } else if (row.isRefId) {
       // Booking Reference ID with subtle blue text treatment
       ctx.textAlign = 'left';
       ctx.fillStyle = '#123A8C';
       ctx.font = 'bold 21.5px "Courier New", monospace, sans-serif';
-      ctx.fillText(row.value, valX, currentY + 65);
+      ctx.fillText(row.value, valX, currentY + (rowH / 2) + 7);
     } else {
       // Standard Value Text
       ctx.textAlign = 'left';
       ctx.fillStyle = '#111827';
-      ctx.font = '500 21.5px "DM Sans", sans-serif';
-      ctx.fillText(row.value, valX, currentY + 65);
+      ctx.font = '500 21px "DM Sans", sans-serif';
+      ctx.fillText(row.value, valX, currentY + (rowH / 2) + 7);
     }
 
     currentY += rowH;
@@ -532,11 +565,11 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
   ctx.roundRect(tableX, tableY, tableW, rows.length * rowH + headerH, 12);
   ctx.stroke();
 
-  // ── 6. IMPORTANT NOTE CARD (Final Section at Bottom) ──
+  // ── 6. IMPORTANT NOTE CARD (Positioned dynamically below the table) ──
   const noteX = 90;
-  const noteY = 1710;
+  const noteY = currentY + 36;
   const noteW = 1420;
-  const noteH = 150;
+  const noteH = 140;
 
   ctx.fillStyle = '#EEF4FF';
   ctx.strokeStyle = '#C9D8F2';
@@ -548,7 +581,7 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
 
   // Left Info Circle Badge (Solid Navy with white 'i')
   const infoCx = noteX + 55;
-  const infoCy = noteY + 75;
+  const infoCy = noteY + 70;
 
   ctx.fillStyle = '#123A8C';
   ctx.beginPath();
@@ -564,11 +597,11 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
   ctx.textAlign = 'left';
   ctx.fillStyle = '#123A8C';
   ctx.font = 'bold 22px "DM Sans", sans-serif';
-  ctx.fillText('Important Note', noteX + 105, noteY + 56);
+  ctx.fillText('Important Note', noteX + 105, noteY + 52);
 
   ctx.fillStyle = '#4B5563';
   ctx.font = 'normal 19.5px "DM Sans", sans-serif';
-  ctx.fillText('Please keep this receipt for your records. For any queries, contact the administration office.', noteX + 105, noteY + 98);
+  ctx.fillText('Please keep this receipt for your records. For any queries, contact the administration office.', noteX + 105, noteY + 92);
 
   return canvas.toDataURL('image/png', 1.0);
 }

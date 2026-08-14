@@ -1,7 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, MapPin, Clock, Plus, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, MapPin, Clock, Plus, User, Lock } from 'lucide-react';
 
-export default function InteractiveCalendar({ onSelectDate, adminMode = false }) {
+// Configurable Density Thresholds & Tiers for Auditorium Daily Capacity
+export const DEFAULT_DENSITY_THRESHOLDS = {
+  LIGHT_MAX: 4,     // 1–4 bookings -> Light
+  MODERATE_MAX: 9,  // 5–9 bookings -> Moderate
+  HEAVY_MIN: 10     // 10+ bookings -> Heavy
+};
+
+export const getDensityStyle = (bookingCount, customThresholds = DEFAULT_DENSITY_THRESHOLDS) => {
+  if (!bookingCount || bookingCount <= 0) {
+    return {
+      bg: '#ECFDF5',       // Soft Emerald Green (0 Free)
+      textColor: '#15803D',// Dark Forest Green
+      fontWeight: '600',
+      border: '1px solid #A7F3D0',
+      tierName: 'free'
+    };
+  }
+  if (bookingCount <= customThresholds.LIGHT_MAX) {
+    return {
+      bg: '#FEE2E2',       // Soft Light Red / Rose (1–4 Light)
+      textColor: '#991B1B',// Dark Red
+      fontWeight: '700',
+      border: '1px solid #FECACA',
+      tierName: 'light'
+    };
+  }
+  if (bookingCount <= customThresholds.MODERATE_MAX) {
+    return {
+      bg: '#FCA5A5',       // Medium Red (5–9 Moderate)
+      textColor: '#7F1D1D',// Deep Dark Red
+      fontWeight: '800',
+      border: '1px solid #F87171',
+      tierName: 'moderate'
+    };
+  }
+  return {
+    bg: '#DC2626',       // Rich Dark Crimson Red (10+ Heavy)
+    textColor: '#FFFFFF',// High contrast pure white text
+    fontWeight: '900',
+    border: '1px solid #991B1B',
+    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
+    tierName: 'heavy'
+  };
+};
+
+export default function InteractiveCalendar({ onSelectDate, adminMode = false, densityThresholds = DEFAULT_DENSITY_THRESHOLDS }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState([]);
   const [venues, setVenues] = useState([]);
@@ -64,6 +109,17 @@ export default function InteractiveCalendar({ onSelectDate, adminMode = false })
     return venues.find(v => v.id === vId)?.name || 'Unknown Venue';
   };
 
+  const formatTime12h = (timeStr) => {
+    if (!timeStr) return '';
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    let hour = parseInt(parts[0], 10);
+    const m = parts[1];
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12;
+    return `${String(hour).padStart(2, '0')}:${m} ${ampm}`;
+  };
+
   const getBookingsForDate = (day) => {
     if (!day) return [];
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -77,6 +133,15 @@ export default function InteractiveCalendar({ onSelectDate, adminMode = false })
     setSelectedDayEvents(dayBookings);
     setSelectedDateStr(dateStr);
   };
+
+  const isSelectedDatePast = selectedDateStr ? (() => {
+    const [selY, selM, selD] = selectedDateStr.split('-').map(Number);
+    const selDateObj = new Date(selY, selM - 1, selD);
+    selDateObj.setHours(0, 0, 0, 0);
+    const todayCheck = new Date();
+    todayCheck.setHours(0, 0, 0, 0);
+    return selDateObj < todayCheck;
+  })() : false;
 
   if (loading) {
     return (
@@ -136,12 +201,48 @@ export default function InteractiveCalendar({ onSelectDate, adminMode = false })
           }}>
             {cells.map((day, idx) => {
               const dayBookings = getBookingsForDate(day);
+              const bookingCount = dayBookings.length;
+              const densityStyle = getDensityStyle(bookingCount, densityThresholds);
+
+              const todayObj = new Date();
+              todayObj.setHours(0, 0, 0, 0);
+
+              const cellDate = day ? new Date(year, month, day) : null;
+              if (cellDate) cellDate.setHours(0, 0, 0, 0);
+              const isPast = cellDate ? cellDate < todayObj : false;
+
               const isToday = day && 
                 new Date().getDate() === day && 
                 new Date().getMonth() === month && 
                 new Date().getFullYear() === year;
               const isSelected = selectedDateStr && day && 
                 selectedDateStr === `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+              // Background Fill (Density intensity color with past date styling)
+              let cellBackground = isPast && bookingCount === 0 ? '#F8FAFC' : densityStyle.bg;
+
+              // Border
+              let cellBorder = densityStyle.border || '1px solid transparent';
+              if (isPast && !isSelected) {
+                cellBorder = '1px solid #E2E8F0';
+              }
+              if (isSelected) {
+                cellBorder = '2.5px solid #4F46E5';
+              } else if (isToday) {
+                cellBorder = '2px dashed #4F46E5';
+              }
+
+              // Text Color
+              let cellTextColor = isPast && bookingCount === 0 ? '#94A3B8' : densityStyle.textColor;
+              if (isSelected && bookingCount === 0) {
+                cellTextColor = '#4F46E5';
+              }
+
+              // Font Weight
+              let cellFontWeight = densityStyle.fontWeight;
+              if (isSelected || isToday) {
+                cellFontWeight = '800';
+              }
 
               return (
                 <div 
@@ -156,39 +257,48 @@ export default function InteractiveCalendar({ onSelectDate, adminMode = false })
                     <div 
                       className="w-100 h-100 d-flex flex-column align-items-center justify-content-center cursor-pointer transition-all"
                       onClick={() => handleDayClick(day)}
+                      title={isPast ? "Past Date (Locked for new bookings)" : isToday ? "Today" : `${day} ${monthNames[month]}`}
                       style={{
                         cursor: 'pointer',
                         borderRadius: '10px',
-                        border: isSelected ? '2px solid #4f46e5' : isToday ? '1px dashed #4f46e5' : '1px solid transparent',
-                        background: isSelected ? '#f5f3ff' : isToday ? '#faf5ff' : 'transparent',
-                        fontWeight: (isToday || isSelected) ? '700' : '400',
-                        color: isSelected ? '#4f46e5' : '#0F172A',
+                        border: cellBorder,
+                        background: cellBackground,
+                        fontWeight: cellFontWeight,
+                        color: cellTextColor,
+                        opacity: isPast && !isSelected ? 0.8 : 1,
+                        boxShadow: densityStyle.boxShadow || 'none',
                         position: 'relative'
                       }}
                       onMouseEnter={(e) => {
-                        if (!isSelected) e.currentTarget.style.backgroundColor = '#f1f5f9';
+                        if (!isSelected) {
+                          e.currentTarget.style.filter = 'brightness(0.93)';
+                          e.currentTarget.style.transform = 'scale(1.04)';
+                        }
                       }}
                       onMouseLeave={(e) => {
-                        if (!isSelected) e.currentTarget.style.backgroundColor = isToday ? '#faf5ff' : 'transparent';
+                        if (!isSelected) {
+                          e.currentTarget.style.backgroundColor = cellBackground;
+                          e.currentTarget.style.filter = 'none';
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }
                       }}
                     >
                       <span style={{ fontSize: '0.9rem' }}>{day}</span>
-                      
-                      {/* Booking indicators (dots) */}
-                      {dayBookings.length > 0 && (
-                        <div className="position-absolute bottom-0 mb-1 d-flex gap-1 justify-content-center w-100">
-                          {dayBookings.slice(0, 3).map((_, bIdx) => (
-                            <span 
-                              key={bIdx} 
-                              className="rounded-circle d-inline-block"
-                              style={{
-                                width: '4px',
-                                height: '4px',
-                                background: '#8e2de2'
-                              }}
-                            ></span>
-                          ))}
-                        </div>
+                      {isPast && (
+                        <span 
+                          title="Past Date (Locked)" 
+                          style={{ 
+                            position: 'absolute', 
+                            top: 3, 
+                            right: 3, 
+                            fontSize: '0.62rem', 
+                            lineHeight: 1, 
+                            opacity: 0.65,
+                            pointerEvents: 'none'
+                          }}
+                        >
+                          🔒
+                        </span>
                       )}
                     </div>
                   ) : (
@@ -197,6 +307,46 @@ export default function InteractiveCalendar({ onSelectDate, adminMode = false })
                 </div>
               );
             })}
+          </div>
+
+          {/* Density Legend Bar */}
+          <div className="mt-4 pt-3 border-top d-flex flex-wrap align-items-center justify-content-between gap-3" style={{ borderColor: '#F1F5F9' }}>
+            <div className="d-flex align-items-center gap-1.5" style={{ color: '#64748B', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#64748B', display: 'inline-block' }}></span>
+              <span>Booking Density:</span>
+            </div>
+
+            <div className="d-flex align-items-center flex-wrap gap-2">
+              {/* 0 Free Pill */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#15803D', fontSize: '0.75rem', fontWeight: 700, boxShadow: '0 1px 3px rgba(16, 185, 129, 0.08)' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10B981', display: 'inline-block' }}></span>
+                <span>0 Free</span>
+              </div>
+
+              {/* 1-4 Light Pill */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', fontSize: '0.75rem', fontWeight: 700, boxShadow: '0 1px 3px rgba(239, 68, 68, 0.08)' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#EF4444', display: 'inline-block' }}></span>
+                <span>1–4 Light</span>
+              </div>
+
+              {/* 5-9 Moderate Pill */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: '#FCA5A5', border: '1px solid #F87171', color: '#7F1D1D', fontSize: '0.75rem', fontWeight: 800, boxShadow: '0 1px 4px rgba(220, 38, 38, 0.12)' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#991B1B', display: 'inline-block' }}></span>
+                <span>5–9 Moderate</span>
+              </div>
+
+              {/* 10+ Heavy Pill */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: '#DC2626', border: '1px solid #991B1B', color: '#FFFFFF', fontSize: '0.75rem', fontWeight: 900, boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#FFFFFF', display: 'inline-block' }}></span>
+                <span>10+ Heavy</span>
+              </div>
+
+              {/* Past Date Locked Pill */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: '#F8FAFC', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <span style={{ fontSize: '0.72rem' }}>🔒</span>
+                <span>Past Date (Locked)</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -222,7 +372,11 @@ export default function InteractiveCalendar({ onSelectDate, adminMode = false })
                     {selectedDateStr}
                   </span>
                 </div>
-                {!adminMode && onSelectDate && (
+                {isSelectedDatePast ? (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: '#F1F5F9', border: '1px solid #CBD5E1', color: '#64748B', fontSize: '0.78rem', fontWeight: 700 }}>
+                    <Lock size={13} /> Locked (Past Date)
+                  </div>
+                ) : (!adminMode && onSelectDate && (
                   <button 
                     className="btn btn-sm btn-gradient-primary d-flex align-items-center justify-content-center gap-1 py-1.5 px-3 rounded-pill shadow-sm"
                     onClick={() => onSelectDate(selectedDateStr)}
@@ -230,24 +384,37 @@ export default function InteractiveCalendar({ onSelectDate, adminMode = false })
                   >
                     <Plus size={14} /> Book Date
                   </button>
-                )}
+                ))}
               </div>
 
               {selectedDayEvents.length === 0 ? (
                 <div className="text-center py-5 my-auto text-muted d-flex flex-column align-items-center gap-2">
-                  <CalendarIcon size={36} className="text-muted opacity-40" />
-                  <p className="mb-0 font-weight-semibold" style={{ fontSize: '0.9rem', color: '#0F172A' }}>No Scheduled Events</p>
-                  <p className="text-secondary mb-0" style={{ fontSize: '0.8rem' }}>This date is 100% free and available for auditorium bookings.</p>
+                  {isSelectedDatePast ? <Lock size={36} className="text-muted opacity-40" /> : <CalendarIcon size={36} className="text-muted opacity-40" />}
+                  <p className="mb-0 font-weight-semibold" style={{ fontSize: '0.9rem', color: '#0F172A' }}>
+                    {isSelectedDatePast ? "Past Date — Locked" : "No Scheduled Events"}
+                  </p>
+                  <p className="text-secondary mb-0" style={{ fontSize: '0.8rem' }}>
+                    {isSelectedDatePast ? "New auditorium bookings are locked for past dates." : "This date is 100% free and available for auditorium bookings."}
+                  </p>
                 </div>
               ) : (
-                <div className="d-flex flex-column gap-3 overflow-y-auto pr-1" style={{ maxHeight: '300px' }}>
+                <div 
+                  className="d-flex flex-column gap-3 custom-scrollbar" 
+                  style={{ 
+                    flex: 1, 
+                    maxHeight: '440px', 
+                    overflowY: 'auto', 
+                    paddingRight: '6px', 
+                    paddingBottom: '12px' 
+                  }}
+                >
                   {selectedDayEvents.map((ev, idx) => (
                     <div 
                       key={idx} 
-                      className="p-3 rounded-4 border shadow-sm"
+                      className="p-3 rounded-4 border shadow-sm transition-all"
                       style={{ 
                         backgroundColor: '#FAFCFF', 
-                        borderColor: '#CBD5E1',
+                        borderColor: '#E2E8F0',
                         borderLeft: '4px solid #EF4444'
                       }}
                     >
@@ -270,7 +437,7 @@ export default function InteractiveCalendar({ onSelectDate, adminMode = false })
                         </div>
                         <div className="d-flex align-items-center gap-2 text-secondary" style={{ fontSize: '0.8rem' }}>
                           <Clock size={13} style={{ color: '#6366F1', flexShrink: 0 }} />
-                          <span className="font-weight-semibold">{ev.startTime} - {ev.endTime}</span>
+                          <span className="font-weight-semibold">{formatTime12h(ev.startTime)} – {formatTime12h(ev.endTime)}</span>
                         </div>
                         {ev.facultyName && (
                           <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: '0.78rem', marginTop: '2px' }}>

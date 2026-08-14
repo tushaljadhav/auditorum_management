@@ -2,16 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 import CustomSelect from '../components/CustomSelect';
-import { Eye, Calendar, MapPin, Clock, Users, Check, X, Trash2, Filter, RefreshCw, Copy, Mail, Phone, Download, Search, CalendarDays, CheckCircle, Building2, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { showCustomToast } from '../utils/toast';
+import { exportToExcel } from '../utils/excelExport';
+import { Eye, Calendar, MapPin, Clock, Users, Check, X, Trash2, Filter, RefreshCw, Copy, Mail, Phone, Download, Search, CalendarDays, CheckCircle, Building2, Sparkles, ChevronLeft, ChevronRight, Shield, RotateCcw, FileText } from 'lucide-react';
 
 const STATUS_BADGE = {
   Approved: { class: 'tailux-badge-approved', label: 'Confirmed' },
   Confirmed: { class: 'tailux-badge-approved', label: 'Confirmed' },
   Cancelled: { class: 'tailux-badge-cancelled', label: 'Cancelled' },
+  cancelled_by_admin: { class: 'tailux-badge-cancelled', label: 'Cancelled (Admin Override)' },
+  reassigned: { class: 'tailux-badge-pending', label: 'Reassigned by Admin' },
+  rescheduled: { class: 'tailux-badge-pending', label: 'Rescheduled by Admin' },
 };
 
 function StatusBadge({ status }) {
-  const s = STATUS_BADGE[status] || STATUS_BADGE.Approved;
+  const s = STATUS_BADGE[status] || { class: 'tailux-badge-approved', label: status || 'Confirmed' };
   return (
     <span className={`tailux-badge ${s.class}`}>
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }}></span>
@@ -50,6 +55,100 @@ export default function AdminBookings() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Override Modal State
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [overrideBooking, setOverrideBooking] = useState(null);
+  const [overrideAction, setOverrideAction] = useState('cancel'); // 'cancel' | 'reassign' | 'reschedule'
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false);
+  const [submittingOverride, setSubmittingOverride] = useState(false);
+
+  // Reassign form state (simplified)
+  const [reassignForm, setReassignForm] = useState({
+    eventName: '',
+    bookedBy: ''
+  });
+
+  // Reschedule form state
+  const [rescheduleForm, setRescheduleForm] = useState({
+    bookingDate: '',
+    startTime: '10:00',
+    endTime: '12:00'
+  });
+
+  // Audit Logs Modal State
+  const [auditLogsModalOpen, setAuditLogsModalOpen] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+
+  const handleOpenOverrideModal = (b) => {
+    setOverrideBooking(b);
+    setOverrideAction('cancel');
+    setOverrideReason('');
+    setReassignForm({
+      eventName: '',
+      bookedBy: b.coordinator || ''
+    });
+    setRescheduleForm({
+      bookingDate: b.bookingDate || new Date().toISOString().split('T')[0],
+      startTime: b.startTime || '10:00',
+      endTime: b.endTime || '12:00'
+    });
+    setOverrideModalOpen(true);
+  };
+
+  const handleExecuteOverride = async (e) => {
+    e.preventDefault();
+    if (!overrideReason || !overrideReason.trim()) {
+      Swal.fire({ icon: 'warning', title: 'Reason Required', text: 'Please enter a reason for change.' });
+      return;
+    }
+
+    setSubmittingOverride(true);
+    try {
+      const payload = {
+        action: overrideAction,
+        reason: overrideReason.trim(),
+        newDetails: overrideAction === 'reassign' ? reassignForm : overrideAction === 'reschedule' ? rescheduleForm : undefined
+      };
+
+      const res = await fetch(`/api/bookings/${overrideBooking.id}/override`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      setSubmittingOverride(false);
+
+      if (res.ok && data.success) {
+        showCustomToast(`Booking ${overrideAction.toUpperCase()}ED!`, `Original booker notified & audit trail recorded.`, 'success');
+        setOverrideModalOpen(false);
+        fetchData();
+      } else {
+        Swal.fire({ icon: 'error', title: 'Override Failed', text: data.error || 'Failed to complete admin override.' });
+      }
+    } catch (err) {
+      console.error(err);
+      setSubmittingOverride(false);
+      Swal.fire({ icon: 'error', title: 'Network Error', text: 'Unable to connect to server.' });
+    }
+  };
+
+  const handleOpenAuditLogs = async () => {
+    setLoadingAuditLogs(true);
+    setAuditLogsModalOpen(true);
+    try {
+      const res = await fetch('/api/admin/audit-logs');
+      const data = await res.json();
+      if (Array.isArray(data)) setAuditLogs(data);
+      setLoadingAuditLogs(false);
+    } catch (err) {
+      console.error(err);
+      setLoadingAuditLogs(false);
+    }
+  };
+
   const fetchData = async () => {
     try {
       const [bRes, vRes, dRes, fRes] = await Promise.all([fetch('/api/bookings'), fetch('/api/venues'), fetch('/api/departments'), fetch('/api/faculty')]);
@@ -83,7 +182,7 @@ export default function AdminBookings() {
     try {
       const res = await fetch(`/api/bookings/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Booking deleted!', showConfirmButton: false, timer: 1500 });
+        showCustomToast('Booking Record Deleted', 'Reservation removed permanently', 'success');
         fetchData();
         if (selectedBookingDetail?.id === id) setDetailModalOpen(false);
       }
@@ -105,7 +204,7 @@ export default function AdminBookings() {
     try {
       const res = await fetch('/api/bookings', { method: 'DELETE' });
       if (res.ok) {
-        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'All bookings cleared!', showConfirmButton: false, timer: 1500 });
+        showCustomToast('All Bookings Cleared', 'System booking log wiped', 'success');
         fetchData();
         setDetailModalOpen(false);
       }
@@ -118,47 +217,50 @@ export default function AdminBookings() {
       return;
     }
     const headers = ['Booking ID', 'Event Name', 'Venue Name', 'Booking Date', 'Start Time', 'End Time', 'Faculty Name', 'Department Name', 'Attendees', 'Status'];
-    const csvRows = [headers.join(',')];
-    filteredBookings.forEach(b => {
+    const rows = filteredBookings.map(b => {
       const fac = faculties.find(f => f.id === b.facultyId);
-      const row = [
-        `"${b.id}"`,
-        `"${(b.eventName || '').replace(/"/g, '""')}"`,
-        `"${(getVenueName(b.venueId) || '').replace(/"/g, '""')}"`,
-        `"${b.bookingDate || ''}"`,
-        `"${b.startTime || ''}"`,
-        `"${b.endTime || ''}"`,
-        `"${(fac?.name || 'Unknown').replace(/"/g, '""')}"`,
-        `"${(getDeptName(b.departmentId) || '').replace(/"/g, '""')}"`,
-        `"${b.attendees || 0}"`,
-        `"${b.status || 'Approved'}"`
+      const facName = b.facultyName || fac?.name || b.coordinator || 'Unknown';
+      const deptName = b.departmentName || getDeptName(b.departmentId) || '';
+      return [
+        b.id || '',
+        b.eventName || '',
+        getVenueName(b.venueId) || '',
+        b.bookingDate || '',
+        formatTime12h(b.startTime),
+        formatTime12h(b.endTime),
+        facName,
+        deptName,
+        b.attendees || 0,
+        b.status || 'Approved'
       ];
-      csvRows.push(row.join(','));
     });
-    const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Auditorium_Bookings_Report_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    const filename = `Auditorium_Bookings_Report_${new Date().toISOString().split('T')[0]}.xls`;
+    exportToExcel(filename, 'Bookings Report', headers, rows);
+    showCustomToast('Excel Report Exported!', 'Formatted spreadsheet with header row downloaded', 'success');
   };
 
   const handleCopyId = (id) => { 
     navigator.clipboard.writeText(id); 
-    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'ID copied!', showConfirmButton: false, timer: 1200 }); 
+    showCustomToast('Booking Reference ID Copied!', id, 'success'); 
   };
 
   const getVenueName = id => venues.find(v => v.id === id)?.name || id;
-  const getDeptName = id => departments.find(d => d.id === id)?.name || id;
+  const getDeptName = id => (id ? (departments.find(d => d.id === id)?.name || id) : '');
 
   const filteredBookings = bookings.filter(b => {
     const venueMatch = venueFilter === 'All' || b.venueId === venueFilter;
     const q = searchQuery.toLowerCase().trim();
     if (!q) return venueMatch;
     const fac = faculties.find(f => f.id === b.facultyId);
-    return venueMatch && (b.eventName.toLowerCase().includes(q) || b.id.toLowerCase().includes(q) || (fac?.name || '').toLowerCase().includes(q));
+    const facName = b.facultyName || fac?.name || b.coordinator || '';
+    const deptName = b.departmentName || getDeptName(b.departmentId) || '';
+    return venueMatch && (
+      (b.eventName || '').toLowerCase().includes(q) || 
+      (b.id || '').toLowerCase().includes(q) || 
+      facName.toLowerCase().includes(q) ||
+      deptName.toLowerCase().includes(q)
+    );
   });
 
   const totalEntries = filteredBookings.length;
@@ -212,6 +314,17 @@ export default function AdminBookings() {
             onMouseEnter={e => { e.currentTarget.style.background = '#EFF6FF'; e.currentTarget.style.borderColor = '#BFDBFE'; }}
             onMouseLeave={e => { e.currentTarget.style.background = '#FFFFFF'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
           ><Download size={15} /> Export CSV</button>
+
+          <button onClick={handleOpenAuditLogs}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+              background: '#F3E8FF', border: '1px solid #D8B4FE', borderRadius: 10,
+              fontSize: '0.85rem', fontWeight: 700, color: '#7E22CE', cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)', transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#E9D5FF'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#F3E8FF'; }}
+          ><Shield size={15} /> Audit Trail</button>
 
           <button onClick={handleClearAll} 
             style={{ 
@@ -328,8 +441,8 @@ export default function AdminBookings() {
               <tbody>
                 {paginatedBookings.map((b, idx) => {
                   const fac = faculties.find(f => f.id === b.facultyId);
-                  const facultyName = fac?.name || '—';
-                  const deptName = getDeptName(b.departmentId);
+                  const facultyName = b.facultyName || fac?.name || b.coordinator || '—';
+                  const deptName = b.departmentName || getDeptName(b.departmentId) || '—';
                   const venueName = getVenueName(b.venueId);
 
                   return (
@@ -420,6 +533,19 @@ export default function AdminBookings() {
                           </button>
 
                           <button
+                            onClick={() => handleOpenOverrideModal(b)}
+                            style={{
+                              padding: '6px 10px', borderRadius: 8, background: '#F3E8FF', border: '1px solid #D8B4FE',
+                              color: '#7E22CE', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: 4, transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#E9D5FF'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#F3E8FF'}
+                          >
+                            <Shield size={13} /> Manage Booking
+                          </button>
+
+                          <button
                             onClick={() => handleDelete(b.id, b.eventName)}
                             style={{
                               padding: '6px 10px', borderRadius: 8, background: '#FEF2F2', border: '1px solid #FECACA',
@@ -429,7 +555,7 @@ export default function AdminBookings() {
                             onMouseEnter={e => e.currentTarget.style.background = '#FEE2E2'}
                             onMouseLeave={e => e.currentTarget.style.background = '#FEF2F2'}
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={13} /> Delete
                           </button>
                         </div>
                       </td>
@@ -565,11 +691,16 @@ export default function AdminBookings() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
                   <div>
                     <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1E3A8A' }}>
-                      {faculties.find(f => f.id === selectedBookingDetail.facultyId)?.name || 'Unknown Faculty'}
+                      {selectedBookingDetail.facultyName || faculties.find(f => f.id === selectedBookingDetail.facultyId)?.name || selectedBookingDetail.coordinator || 'Unknown Faculty'}
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#3B82F6', fontWeight: 600 }}>
-                      Department: {getDeptName(selectedBookingDetail.departmentId)}
+                      Department: {selectedBookingDetail.departmentName || getDeptName(selectedBookingDetail.departmentId) || 'N/A'}
                     </div>
+                    {(selectedBookingDetail.classYear || selectedBookingDetail.className) && (
+                      <div style={{ fontSize: '0.75rem', color: '#1D4ED8', fontWeight: 700, marginTop: 2 }}>
+                        Class / Year: {selectedBookingDetail.classYear || selectedBookingDetail.className}
+                      </div>
+                    )}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#1E3A8A' }}>
@@ -600,6 +731,258 @@ export default function AdminBookings() {
               </button>
             </div>
 
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Manage Booking (Admin Override) Modal */}
+      {overrideModalOpen && overrideBooking && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          background: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
+        }} onClick={() => setOverrideModalOpen(false)}>
+          <div style={{
+            width: '100%', maxWidth: 480, background: '#FFFFFF', borderRadius: 16,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            border: '1px solid #E2E8F0', overflow: 'hidden'
+          }} onClick={e => e.stopPropagation()}>
+            
+            {/* Header: Just "Manage Booking" and close button */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8FAFC' }}>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>Manage Booking</h3>
+              <button onClick={() => setOverrideModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', display: 'flex', padding: 4 }}><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleExecuteOverride} style={{ padding: '20px' }}>
+              {/* Current Booking Summary Card */}
+              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
+                <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.92rem', marginBottom: 4 }}>{overrideBooking.eventName}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: '0.78rem', color: '#475569' }}>
+                  <span>🏢 <strong>{getVenueName(overrideBooking.venueId)}</strong></span>
+                  <span>📅 <strong>{overrideBooking.bookingDate}</strong></span>
+                  <span>🕒 <strong>{formatTime12h(overrideBooking.startTime)} - {formatTime12h(overrideBooking.endTime)}</strong></span>
+                  <span>👥 <strong>{overrideBooking.attendees} Attendees</strong></span>
+                </div>
+              </div>
+
+              {/* Action Selection (Compact Segmented Tabs) */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                  Action <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                  {[
+                    { id: 'cancel', label: 'Cancel' },
+                    { id: 'reassign', label: 'Reassign' },
+                    { id: 'reschedule', label: 'Reschedule' }
+                  ].map(act => (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => setOverrideAction(act.id)}
+                      style={{
+                        padding: '7px 10px', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer',
+                        border: overrideAction === act.id ? '2px solid #2563EB' : '1px solid #CBD5E1',
+                        background: overrideAction === act.id ? '#EFF6FF' : '#FFFFFF',
+                        color: overrideAction === act.id ? '#1D4ED8' : '#475569',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {act.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reason Field */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                  Reason for change <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. VIP guest visit, Principal's function, Emergency maintenance"
+                  value={overrideReason}
+                  onChange={e => setOverrideReason(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.84rem', outline: 'none' }}
+                />
+              </div>
+
+              {/* Conditional Fields */}
+              {overrideAction === 'reassign' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>New Event Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Guest Lecture"
+                      value={reassignForm.eventName}
+                      onChange={e => setReassignForm({ ...reassignForm, eventName: e.target.value })}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.84rem' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Booked By *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Dr. Sharma / CS Dept"
+                      value={reassignForm.bookedBy}
+                      onChange={e => setReassignForm({ ...reassignForm, bookedBy: e.target.value })}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.84rem' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {overrideAction === 'reschedule' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>New Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={rescheduleForm.bookingDate}
+                      onChange={e => setRescheduleForm({ ...rescheduleForm, bookingDate: e.target.value })}
+                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Start Time *</label>
+                    <input
+                      type="time"
+                      required
+                      value={rescheduleForm.startTime}
+                      onChange={e => setRescheduleForm({ ...rescheduleForm, startTime: e.target.value })}
+                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>End Time *</label>
+                    <input
+                      type="time"
+                      required
+                      value={rescheduleForm.endTime}
+                      onChange={e => setRescheduleForm({ ...rescheduleForm, endTime: e.target.value })}
+                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <button
+                  type="button"
+                  onClick={() => setOverrideModalOpen(false)}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#475569', fontSize: '0.84rem', fontWeight: 650, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingOverride || !overrideReason.trim()}
+                  style={{
+                    padding: '8px 18px', borderRadius: 8, border: 'none',
+                    background: !overrideReason.trim() ? '#94A3B8' : '#2563EB',
+                    color: '#FFFFFF', fontSize: '0.84rem', fontWeight: 700,
+                    cursor: (!overrideReason.trim() || submittingOverride) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {submittingOverride ? 'Saving...' : 
+                   overrideAction === 'cancel' ? 'Confirm Cancellation' : 
+                   overrideAction === 'reassign' ? 'Confirm Reassignment' : 
+                   'Confirm Reschedule'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Audit Logs Modal */}
+      {auditLogsModalOpen && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
+        }} onClick={() => setAuditLogsModalOpen(false)}>
+          <div style={{
+            width: '100%', maxWidth: 780, background: '#FFFFFF', borderRadius: 20,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #E2E8F0',
+            overflow: 'hidden', animation: 'tailuxModalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            maxHeight: '85vh', display: 'flex', flexDirection: 'column'
+          }} onClick={e => e.stopPropagation()}>
+            
+            {/* Header */}
+            <div style={{ padding: '20px 24px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: '#F3E8FF', border: '1px solid #D8B4FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Shield size={20} style={{ color: '#7E22CE' }} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>Permanent Audit Trail Log (`booking_audit_log`)</h4>
+                  <div style={{ fontSize: '0.76rem', color: '#64748B', marginTop: 1 }}>Accountability records for all admin overrides</div>
+                </div>
+              </div>
+              <button onClick={() => setAuditLogsModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', padding: 4 }}><X size={20} /></button>
+            </div>
+
+            {/* Log Body */}
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {loadingAuditLogs ? (
+                <div style={{ textAlign: 'center', padding: 40 }}><div className="spinner-border text-primary" role="status" /></div>
+              ) : auditLogs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B' }}>
+                  <Shield size={36} style={{ color: '#CBD5E1', marginBottom: 10 }} />
+                  <div style={{ fontWeight: 700, color: '#334155' }}>No Audit Trail Entries Found</div>
+                  <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Every admin override action will create an immutable log entry here.</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {auditLogs.map(log => (
+                    <div key={log.id} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            padding: '4px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase',
+                            background: log.action_type === 'cancel' ? '#FEF2F2' : log.action_type === 'reassign' ? '#EFF6FF' : '#F3E8FF',
+                            color: log.action_type === 'cancel' ? '#DC2626' : log.action_type === 'reassign' ? '#1D4ED8' : '#7E22CE',
+                            border: log.action_type === 'cancel' ? '1px solid #FECACA' : log.action_type === 'reassign' ? '1px solid #BFDBFE' : '1px solid #D8B4FE'
+                          }}>
+                            {log.action_type}
+                          </span>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F172A' }}>Booking ID: {log.booking_id}</span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>
+                          🕒 {log.created_at ? new Date(log.created_at).toLocaleString() : '—'}
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '0.82rem', color: '#334155', marginBottom: 6 }}>
+                        <strong>Admin:</strong> {log.admin_name || log.admin_id || 'System Admin'}
+                      </div>
+
+                      <div style={{ fontSize: '0.82rem', color: '#475569', background: '#FFFFFF', padding: '8px 12px', borderRadius: 8, border: '1px solid #CBD5E1' }}>
+                        <strong>Justification Reason:</strong> "{log.reason}"
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '14px 24px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setAuditLogsModalOpen(false)} style={{ padding: '8px 18px', borderRadius: 10, background: '#FFFFFF', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 700, color: '#475569', cursor: 'pointer' }}>
+                Close
+              </button>
+            </div>
           </div>
         </div>,
         document.body

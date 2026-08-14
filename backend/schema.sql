@@ -78,8 +78,8 @@ ON DUPLICATE KEY UPDATE name=name;
 CREATE TABLE IF NOT EXISTS bookings (
     id VARCHAR(50) PRIMARY KEY,
     eventName VARCHAR(255) NOT NULL,
-    departmentId VARCHAR(50),
-    facultyId VARCHAR(50),
+    departmentName VARCHAR(150),
+    facultyName VARCHAR(150),
     venueId VARCHAR(50),
     eventDescription TEXT,
     bookingDate VARCHAR(50) NOT NULL, -- Stored as string YYYY-MM-DD to preserve React compatibility
@@ -93,15 +93,14 @@ CREATE TABLE IF NOT EXISTS bookings (
     coordinator VARCHAR(150),
     email VARCHAR(150),
     phone VARCHAR(50),
-    FOREIGN KEY (departmentId) REFERENCES departments(id) ON DELETE SET NULL,
-    FOREIGN KEY (facultyId) REFERENCES faculty(id) ON DELETE SET NULL,
+    classYear VARCHAR(100),
     FOREIGN KEY (venueId) REFERENCES venues(id) ON DELETE SET NULL
 );
 
 -- Seed Initial Test Bookings
-INSERT INTO bookings (id, eventName, departmentId, facultyId, venueId, eventDescription, bookingDate, startTime, endTime, attendees, status, attendanceStatus, attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone) VALUES 
-('booking_1', 'Web Development Workshop', 'dept_1', 'faculty_1', 'venue_1', 'A hands-on workshop covering Node.js and React concepts.', '2026-07-15', '10:00', '13:00', 120, 'Approved', 'CLOSED', NULL, NULL, 'Faculty Coordinator Dr. Rajesh Kumar', 'rajesh.kumar@example.com', '+91 9876543210'),
-('booking_2', 'AI/ML Seminar', 'dept_2', 'faculty_3', 'venue_3', 'Guest lecture on future advancements in generative models.', '2026-07-20', '14:00', '16:00', 450, 'Pending', 'CLOSED', NULL, NULL, 'Dr. Neha Sharma', 'neha.sharma@example.com', '+91 9876543212')
+INSERT INTO bookings (id, eventName, departmentName, facultyName, venueId, eventDescription, bookingDate, startTime, endTime, attendees, status, attendanceStatus, attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone) VALUES 
+('booking_1', 'Web Development Workshop', 'IT', 'Dr. Rajesh Kumar', 'venue_1', 'A hands-on workshop covering Node.js and React concepts.', '2026-07-15', '10:00', '13:00', 120, 'Approved', 'CLOSED', NULL, NULL, 'Faculty Coordinator Dr. Rajesh Kumar', 'rajesh.kumar@example.com', '+91 9876543210'),
+('booking_2', 'AI/ML Seminar', 'CSE', 'Dr. Neha Sharma', 'venue_3', 'Guest lecture on future advancements in generative models.', '2026-07-20', '14:00', '16:00', 450, 'Pending', 'CLOSED', NULL, NULL, 'Dr. Neha Sharma', 'neha.sharma@example.com', '+91 9876543212')
 ON DUPLICATE KEY UPDATE eventName=eventName;
 
 -- 6. Attendance Table

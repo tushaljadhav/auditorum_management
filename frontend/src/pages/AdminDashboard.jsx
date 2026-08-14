@@ -146,7 +146,7 @@ export default function AdminDashboard() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, fontFamily: "'DM Sans', sans-serif" }}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 16 }}>
         <StatWidget 
           icon={CalendarDays} 
           iconBg="#EFF6FF" 
@@ -168,28 +168,6 @@ export default function AdminDashboard() {
           badgeText="Halls"
           badgeBg="#ECFEFF"
           badgeColor="#0891B2"
-        />
-        <StatWidget 
-          icon={Users} 
-          iconBg="#F5F3FF" 
-          iconColor="#6366F1" 
-          value={stats?.totalFaculty ?? 0} 
-          label="Faculty Profiles" 
-          sublabel="Registered staff"
-          badgeText="Staff"
-          badgeBg="#F5F3FF"
-          badgeColor="#6366F1"
-        />
-        <StatWidget 
-          icon={Building2} 
-          iconBg="#F0FDF4" 
-          iconColor="#22C55E" 
-          value={stats?.totalDepartments ?? 0} 
-          label="Academic Departments" 
-          sublabel="College departments"
-          badgeText="Units"
-          badgeBg="#DCFCE7"
-          badgeColor="#15803D"
         />
       </div>
 
@@ -432,7 +410,7 @@ export default function AdminDashboard() {
               </thead>
               <tbody>
                 {recentBookings.map((b, idx) => {
-                  const facultyName = getFacultyName(b.facultyId);
+                  const facultyName = b.facultyName || getFacultyName(b.facultyId) || b.coordinator || '—';
                   const initial = facultyName && facultyName !== '—' ? facultyName[0].toUpperCase() : 'F';
                   return (
                     <tr key={b.id}

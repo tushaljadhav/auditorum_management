@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { jsPDF } from 'jspdf';
 import { drawCollegeHeader, downloadOfficialAttendancePDF } from '../utils/pdfHeader';
+import { showCustomToast } from '../utils/toast';
+import { exportToExcel } from '../utils/excelExport';
 import Footer from '../components/Footer';
 import { 
   MapPin, 
@@ -26,7 +28,9 @@ import {
   RefreshCw,
   Sparkles,
   Zap,
-  Globe
+  Globe,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 export default function StudentAttendance() {
@@ -42,6 +46,7 @@ export default function StudentAttendance() {
   const [loadingBooking, setLoadingBooking] = useState(false);
   const [markingLoading, setMarkingLoading] = useState(false);
   const [markedRecord, setMarkedRecord] = useState(null);
+  const [attendancePage, setAttendancePage] = useState(1);
 
   const [rollNumber, setRollNumber] = useState('');
   const [studentName, setStudentName] = useState('');
@@ -201,27 +206,19 @@ export default function StudentAttendance() {
       Swal.fire({ icon: 'info', title: 'No Roster Data', text: 'There are no attendance records to export yet.' });
       return;
     }
-    const headers = ["Roll Number", "Student Name", "Class/Stream", "Distance (Meters)", "Status", "Check-in Timestamp"];
-    const csvRows = [
-      headers.join(','),
-      ...list.map(r => [
-        `"${r.rollNumber || ''}"`,
-        `"${r.studentName || ''}"`,
-        `"${r.classStream || ''}"`,
-        `"${r.distanceFromVenue || 0}m"`,
-        `"${r.status || 'VERIFIED'}"`,
-        `"${new Date(r.checkInTime).toLocaleString()}"`
-      ].join(','))
-    ];
+    const headers = ["Roll Number", "Student Name", "Class/Stream", "Distance", "Status", "Check-in Timestamp"];
+    const rows = list.map(r => [
+      r.rollNumber || '—',
+      r.studentName || '—',
+      r.classStream || '—',
+      `${r.distanceFromVenue || 0}m`,
+      r.status || 'VERIFIED',
+      new Date(r.checkInTime).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
+    ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Attendance_${eventName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const filename = `Attendance_${(eventName || 'Event').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xls`;
+    exportToExcel(filename, 'Attendance Roster', headers, rows);
+    showCustomToast('Excel File Exported!', 'Formatted spreadsheet with header row downloaded', 'success');
   };
 
   // ── PDF Attendance Report Download ──────────────────────────
@@ -253,7 +250,7 @@ export default function StudentAttendance() {
 
   useEffect(() => {
     let interval = null;
-    if (booking && booking.status === 'Approved' && booking.attendanceStatus === 'OPEN') {
+    if (booking && (booking.status === 'Approved' || booking.status === 'Confirmed') && booking.attendanceStatus === 'OPEN') {
       fetchAttendanceList(booking.id);
       interval = setInterval(() => {
         fetchAttendanceList(booking.id);
@@ -326,15 +323,7 @@ export default function StudentAttendance() {
         setGpsErrorMsg('');
         setGpsStatus('');
         setGpsAccuracy(3);
-        Swal.fire({
-          toast: true,
-          position: 'top-end',
-          icon: 'success',
-          title: 'Campus GPS Verified!',
-          text: 'Location matched inside Kirti Auditorium',
-          showConfirmButton: false,
-          timer: 2000
-        });
+        showCustomToast('Campus GPS Verified!', 'Location matched inside Kirti Auditorium', 'success');
       }
       return;
     }
@@ -620,8 +609,8 @@ export default function StudentAttendance() {
                 <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#2563EB' }}>
                   Auditorium Event Session
                 </span>
-                <span className={`tailux-badge ${booking.status === 'Approved' ? 'tailux-badge-success' : 'tailux-badge-danger'}`} style={{ fontSize: '0.72rem', padding: '4px 12px' }}>
-                  {booking.status === 'Approved' ? 'Confirmed & Active' : booking.status}
+                <span className={`tailux-badge ${(booking.status === 'Approved' || booking.status === 'Confirmed') ? 'tailux-badge-success' : 'tailux-badge-danger'}`} style={{ fontSize: '0.72rem', padding: '4px 12px' }}>
+                  {(booking.status === 'Approved' || booking.status === 'Confirmed') ? 'Confirmed & Active' : booking.status}
                 </span>
               </div>
 
@@ -674,8 +663,8 @@ export default function StudentAttendance() {
               </div>
             </div>
 
-            {/* Approved Booking Journey */}
-            {booking.status === 'Approved' && (
+            {/* Confirmed / Approved Booking Journey */}
+            {(booking.status === 'Approved' || booking.status === 'Confirmed') && (
               <div>
                 
                 {isStudent ? (
@@ -983,7 +972,7 @@ export default function StudentAttendance() {
                               type="button" 
                               onClick={() => {
                                 navigator.clipboard.writeText(`${window.location.origin}/attendance?bookingId=${booking.id}`);
-                                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Link Copied!', showConfirmButton: false, timer: 1500 });
+                                showCustomToast('Link Copied!', 'Attendance URL copied to clipboard', 'success');
                               }}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '8px 14px', borderRadius: 8, border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#334155', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
                             >
@@ -1030,35 +1019,102 @@ export default function StudentAttendance() {
                               Waiting for students inside auditorium to verify GPS location...
                             </div>
                           ) : (
-                            <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: 12 }}>
-                              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-                                <thead>
-                                  <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                                    <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569' }}>Roll No</th>
-                                    <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569' }}>Student Name</th>
-                                    <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569' }}>Class</th>
-                                    <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569' }}>Distance</th>
-                                    <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569' }}>Time</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {attendanceList.map((a, idx) => (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                      <td style={{ padding: '10px 14px', fontWeight: 800, color: '#2563EB' }}>{a.rollNumber}</td>
-                                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0F172A' }}>{a.studentName}</td>
-                                      <td style={{ padding: '10px 14px', color: '#475569' }}>{a.classStream}</td>
-                                      <td style={{ padding: '10px 14px' }}>
-                                        <span className="tailux-badge tailux-badge-success" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
-                                          {a.distanceFromVenue}m
-                                        </span>
-                                      </td>
-                                      <td style={{ padding: '10px 14px', color: '#64748B', fontSize: '0.78rem' }}>
-                                        {new Date(a.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                            <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden' }}>
+                              {(() => {
+                                const itemsPerPage = 8;
+                                const totalPages = Math.ceil(attendanceList.length / itemsPerPage) || 1;
+                                const currentPage = Math.min(attendancePage, totalPages);
+                                const paginatedList = attendanceList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+                                return (
+                                  <>
+                                    <div style={{ overflowX: 'auto' }}>
+                                      <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                                        <thead>
+                                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                            <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', whiteSpace: 'nowrap' }}>Roll No</th>
+                                            <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', whiteSpace: 'nowrap' }}>Student Name</th>
+                                            <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', whiteSpace: 'nowrap' }}>Class</th>
+                                            <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', whiteSpace: 'nowrap' }}>Distance</th>
+                                            <th style={{ padding: '10px 14px', fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', whiteSpace: 'nowrap' }}>Time</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {paginatedList.map((a, idx) => (
+                                            <tr key={idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                              <td style={{ padding: '10px 14px', fontWeight: 800, color: '#2563EB', whiteSpace: 'nowrap' }}>{a.rollNumber}</td>
+                                              <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap' }}>{a.studentName}</td>
+                                              <td style={{ padding: '10px 14px', color: '#475569', whiteSpace: 'nowrap' }}>{a.classStream}</td>
+                                              <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                                                <span className="tailux-badge tailux-badge-success" style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
+                                                  {a.distanceFromVenue}m
+                                                </span>
+                                              </td>
+                                              <td style={{ padding: '10px 14px', color: '#64748B', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                                                {new Date(a.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+
+                                    {/* DataTables Style Pagination Footer */}
+                                    <div style={{ padding: '10px 14px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                                      <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
+                                        Showing <strong>{((currentPage - 1) * itemsPerPage) + 1}</strong> to <strong>{Math.min(currentPage * itemsPerPage, attendanceList.length)}</strong> of <strong>{attendanceList.length}</strong> students
+                                      </div>
+
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => setAttendancePage(p => Math.max(1, p - 1))}
+                                          disabled={currentPage === 1}
+                                          style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 2, padding: '4px 8px',
+                                            borderRadius: 6, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
+                                            color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.75rem', fontWeight: 700,
+                                            cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                                          }}
+                                        >
+                                          <ChevronLeft size={13} /> Prev
+                                        </button>
+
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(pNum => (
+                                          <button
+                                            key={pNum}
+                                            type="button"
+                                            onClick={() => setAttendancePage(pNum)}
+                                            style={{
+                                              minWidth: 26, height: 26, borderRadius: 6,
+                                              border: currentPage === pNum ? '1px solid #2563EB' : '1px solid #CBD5E1',
+                                              background: currentPage === pNum ? '#2563EB' : '#FFFFFF',
+                                              color: currentPage === pNum ? '#FFFFFF' : '#334155',
+                                              fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer'
+                                            }}
+                                          >
+                                            {pNum}
+                                          </button>
+                                        ))}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => setAttendancePage(p => Math.min(totalPages, p + 1))}
+                                          disabled={currentPage === totalPages}
+                                          style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 2, padding: '4px 8px',
+                                            borderRadius: 6, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
+                                            color: currentPage === totalPages ? '#94A3B8' : '#334155', fontSize: '0.75rem', fontWeight: 700,
+                                            cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                                          }}
+                                        >
+                                          Next <ChevronRight size={13} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           )}
                         </div>

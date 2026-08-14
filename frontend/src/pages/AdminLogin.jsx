@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { showCustomToast } from '../utils/toast';
 import { 
   User, Lock, Eye, EyeOff, Shield, 
   ShieldCheck, ArrowRight, Building2, MapPin, 
@@ -39,14 +40,7 @@ export default function AdminLogin() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        Swal.fire({
-          toast: true,
-          position: 'top-end',
-          icon: 'success',
-          title: 'Welcome back, Administrator!',
-          showConfirmButton: false,
-          timer: 1500
-        });
+        showCustomToast('Welcome back, Administrator!', 'System session initialized', 'success');
         navigate('/admin/dashboard');
       } else {
         setError(data.error || 'Invalid username or password.');
@@ -62,14 +56,7 @@ export default function AdminLogin() {
     setUsername('admin');
     setPassword('admin123');
     setError('');
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: 'info',
-      title: 'Demo credentials loaded!',
-      showConfirmButton: false,
-      timer: 1200
-    });
+    showCustomToast('Demo credentials loaded!', 'admin / admin123', 'info');
   };
 
   const handleForgotPassword = (e) => {

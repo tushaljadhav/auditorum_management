@@ -13,15 +13,73 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// Run dynamic schema migration to ensure classStream column exists
+// Run dynamic schema migration to ensure required columns and tables exist
 (async () => {
   try {
     await pool.query('ALTER TABLE attendance ADD COLUMN classStream VARCHAR(100) NULL');
-    console.log('Database Migration: Added classStream column to attendance table.');
-  } catch (err) {
-    if (err.errno !== 1060) {
-      console.error('Migration Warning:', err.message);
+  } catch (err) {}
+
+  // Migrate bookings: rename departmentId -> departmentName, facultyId -> facultyName, className -> classYear
+  // Drop foreign key constraints for departmentId and facultyId first
+  try {
+    const [fks] = await pool.query(`SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'departmentId' AND REFERENCED_TABLE_NAME IS NOT NULL`);
+    for (const fk of fks) {
+      await pool.query(`ALTER TABLE bookings DROP FOREIGN KEY ${fk.CONSTRAINT_NAME}`);
     }
+  } catch (err) {}
+  try {
+    const [fks] = await pool.query(`SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bookings' AND COLUMN_NAME = 'facultyId' AND REFERENCED_TABLE_NAME IS NOT NULL`);
+    for (const fk of fks) {
+      await pool.query(`ALTER TABLE bookings DROP FOREIGN KEY ${fk.CONSTRAINT_NAME}`);
+    }
+  } catch (err) {}
+
+  // Rename columns safely (skip if already renamed)
+  try {
+    await pool.query('ALTER TABLE bookings CHANGE COLUMN departmentId departmentName VARCHAR(150) NULL');
+  } catch (err) {}
+  try {
+    await pool.query('ALTER TABLE bookings CHANGE COLUMN facultyId facultyName VARCHAR(150) NULL');
+  } catch (err) {}
+  try {
+    await pool.query('ALTER TABLE bookings CHANGE COLUMN className classYear VARCHAR(100) NULL');
+  } catch (err) {}
+  // If classYear column doesn't exist at all (fresh DB without className either), add it
+  try {
+    await pool.query('ALTER TABLE bookings ADD COLUMN classYear VARCHAR(100) NULL');
+  } catch (err) {}
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS booking_audit_log (
+        id VARCHAR(50) PRIMARY KEY,
+        booking_id VARCHAR(50) NOT NULL,
+        admin_id VARCHAR(50) NOT NULL,
+        admin_name VARCHAR(150),
+        action_type VARCHAR(50) NOT NULL,
+        reason TEXT NOT NULL,
+        previous_booking_snapshot TEXT,
+        new_booking_snapshot TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id VARCHAR(50) PRIMARY KEY,
+        recipientId VARCHAR(50),
+        recipientEmail VARCHAR(150),
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        bookingId VARCHAR(50),
+        isRead TINYINT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Database Migration: Verified audit logs and notifications tables.');
+  } catch (err) {
+    console.error('Migration Warning:', err.message);
   }
 })();
 
@@ -211,35 +269,90 @@ const dbMysql = {
     const id = `booking_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
     await query(`
       INSERT INTO bookings (
-        id, eventName, departmentId, facultyId, venueId, eventDescription, 
+        id, eventName, departmentName, facultyName, venueId, eventDescription, 
         bookingDate, startTime, endTime, attendees, status, attendanceStatus, 
-        attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone, classYear
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id,
       b.eventName,
-      b.departmentId,
-      b.facultyId,
+      b.departmentName || '',
+      b.facultyName || '',
       b.venueId,
       b.eventDescription || '',
       b.bookingDate,
       b.startTime,
       b.endTime,
       b.attendees !== undefined ? Number(b.attendees) : 0,
-      b.status || 'Approved',
+      b.status || 'Confirmed',
       b.attendanceStatus || 'CLOSED',
       b.attendanceWindowStart || null,
       b.attendanceWindowEnd || null,
       b.coordinator || '',
       b.email || '',
-      b.phone || ''
+      b.phone || '',
+      b.classYear || ''
     ]);
-    return { id, status: 'Approved', attendanceStatus: 'CLOSED', ...b };
+    return { id, status: b.status || 'Confirmed', attendanceStatus: 'CLOSED', ...b };
   },
   updateBookingStatus: async (id, status) => {
     await query('UPDATE bookings SET status = ? WHERE id = ?', [status, id]);
     const rows = await query('SELECT * FROM bookings WHERE id = ?', [id]);
     return rows[0] || null;
+  },
+  updateBooking: async (id, fields) => {
+    const keys = Object.keys(fields).filter(k => fields[k] !== undefined);
+    if (keys.length === 0) return null;
+    const setClause = keys.map(k => `${k} = ?`).join(', ');
+    const params = keys.map(k => fields[k]);
+    params.push(id);
+    await query(`UPDATE bookings SET ${setClause} WHERE id = ?`, params);
+    const rows = await query('SELECT * FROM bookings WHERE id = ?', [id]);
+    return rows[0] || null;
+  },
+  addAuditLog: async (log) => {
+    const id = `audit_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+    const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    await query(`
+      INSERT INTO booking_audit_log (id, booking_id, admin_id, admin_name, action_type, reason, previous_booking_snapshot, new_booking_snapshot, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      id,
+      log.booking_id,
+      log.admin_id,
+      log.admin_name || 'Admin',
+      log.action_type,
+      log.reason,
+      log.previous_booking_snapshot || null,
+      log.new_booking_snapshot || null,
+      createdAt
+    ]);
+    return { id, ...log, created_at: createdAt };
+  },
+  getAuditLogs: async () => {
+    return await query('SELECT * FROM booking_audit_log ORDER BY created_at DESC');
+  },
+  addNotification: async (notif) => {
+    const id = `notif_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+    const createdAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    await query(`
+      INSERT INTO notifications (id, recipientId, recipientEmail, title, message, reason, type, bookingId, isRead, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `, [
+      id,
+      notif.recipientId || '',
+      notif.recipientEmail || '',
+      notif.title,
+      notif.message,
+      notif.reason,
+      notif.type,
+      notif.bookingId,
+      createdAt
+    ]);
+    return { id, ...notif, isRead: 0, created_at: createdAt };
+  },
+  getNotifications: async () => {
+    return await query('SELECT * FROM notifications ORDER BY created_at DESC');
   },
   deleteBooking: async (id) => {
     const result = await query('DELETE FROM bookings WHERE id = ?', [id]);
@@ -285,7 +398,7 @@ const dbMysql = {
       SELECT COUNT(*) as count FROM bookings 
       WHERE venueId = ? 
         AND bookingDate = ? 
-        AND status != 'Cancelled'
+        AND status NOT IN ('Cancelled', 'cancelled_by_admin', 'reassigned')
         AND (? < endTime AND ? > startTime)
     `;
     const params = [venueId, bookingDate, startTime, endTime];
@@ -371,8 +484,8 @@ const dbMysql = {
       if (backupObj.bookings && Array.isArray(backupObj.bookings)) {
         await query('TRUNCATE TABLE bookings');
         for (const b of backupObj.bookings) {
-          await query('INSERT INTO bookings (id, eventName, departmentId, facultyId, venueId, eventDescription, bookingDate, startTime, endTime, attendees, status, attendanceStatus, attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [b.id, b.eventName, b.departmentId, b.facultyId, b.venueId, b.eventDescription || '', b.bookingDate, b.startTime, b.endTime, b.attendees, b.status || 'Approved', b.attendanceStatus || 'CLOSED', b.attendanceWindowStart || null, b.attendanceWindowEnd || null, b.coordinator || '', b.email || '', b.phone || '']);
+          await query('INSERT INTO bookings (id, eventName, departmentName, facultyName, venueId, eventDescription, bookingDate, startTime, endTime, attendees, status, attendanceStatus, attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone, classYear) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [b.id, b.eventName, b.departmentName || b.departmentId || '', b.facultyName || b.facultyId || '', b.venueId, b.eventDescription || '', b.bookingDate, b.startTime, b.endTime, b.attendees, b.status || 'Confirmed', b.attendanceStatus || 'CLOSED', b.attendanceWindowStart || null, b.attendanceWindowEnd || null, b.coordinator || '', b.email || '', b.phone || '', b.classYear || '']);
         }
       }
       if (backupObj.attendance && Array.isArray(backupObj.attendance)) {
