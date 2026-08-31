@@ -42,7 +42,7 @@ export default function AdminLayout() {
 
   const handleDownloadBackup = () => {
     window.location.href = '/api/admin/backup';
-    showCustomToast('Database Backup Downloaded!', 'JSON backup file exported', 'success');
+    showCustomToast('Excel Backup Downloaded!', 'Formatted spreadsheet with all system data exported', 'success');
   };
 
   const handleFileSelect = (e) => {
@@ -393,7 +393,7 @@ export default function AdminLayout() {
               borderRadius: '10px', fontSize: '0.78rem', fontWeight: 700, color: '#334155',
               cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', transition: 'all 0.15s ease'
             }}
-            title="Download full JSON backup of system database"
+            title="Download full Excel backup of system database"
             onMouseEnter={e => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.color = '#2563EB'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.color = '#334155'; }}
           >

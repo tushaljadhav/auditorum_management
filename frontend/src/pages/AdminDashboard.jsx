@@ -83,7 +83,6 @@ export default function AdminDashboard() {
   const [bookings, setBookings] = useState([]);
   const [venues, setVenues] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [faculties, setFaculties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [venuePage, setVenuePage] = useState(1);
   const [deptPage, setDeptPage] = useState(1);
@@ -91,15 +90,14 @@ export default function AdminDashboard() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [sRes, bRes, vRes, dRes, fRes] = await Promise.all([
+      const [sRes, bRes, vRes, dRes] = await Promise.all([
         fetch('/api/dashboard/stats'),
         fetch('/api/bookings'),
         fetch('/api/venues'),
         fetch('/api/departments'),
-        fetch('/api/faculty'),
       ]);
-      const [sData, bData, vData, dData, fData] = await Promise.all([
-        sRes.json(), bRes.json(), vRes.json(), dRes.json(), fRes.json(),
+      const [sData, bData, vData, dData] = await Promise.all([
+        sRes.json(), bRes.json(), vRes.json(), dRes.json(),
       ]);
       setStats(sData);
       if (Array.isArray(bData)) {
@@ -108,7 +106,6 @@ export default function AdminDashboard() {
       }
       if (Array.isArray(vData)) setVenues(vData);
       if (Array.isArray(dData)) setDepartments(dData);
-      if (Array.isArray(fData)) setFaculties(fData);
     } catch (err) {
       console.error('Dashboard load failed:', err);
     } finally {
@@ -119,7 +116,6 @@ export default function AdminDashboard() {
   useEffect(() => { fetchAll(); }, []);
 
   const getVenueName = id => venues.find(v => v.id === id)?.name || '—';
-  const getFacultyName = id => faculties.find(f => f.id === id)?.name || '—';
   const recentBookings = bookings.slice(0, 6);
   const maxVenueCount = Math.max(...(stats?.venueStats || []).map(v => v.count), 1);
   const maxDeptCount = Math.max(...(stats?.deptStats || []).map(d => d.count), 1);
@@ -410,7 +406,7 @@ export default function AdminDashboard() {
               </thead>
               <tbody>
                 {recentBookings.map((b, idx) => {
-                  const facultyName = b.facultyName || getFacultyName(b.facultyId) || b.coordinator || '—';
+                  const facultyName = b.facultyName || b.coordinator || '—';
                   const initial = facultyName && facultyName !== '—' ? facultyName[0].toUpperCase() : 'F';
                   return (
                     <tr key={b.id}

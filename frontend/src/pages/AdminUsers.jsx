@@ -6,7 +6,7 @@ import { Plus, Edit2, Trash2, X, ShieldCheck, Key, UserCheck, Search, ChevronLef
 const avatarGrad = (name) => {
   const colors = ['linear-gradient(135deg,#60A5FA,#2563EB)','linear-gradient(135deg,#A78BFA,#6366F1)','linear-gradient(135deg,#34D399,#059669)','linear-gradient(135deg,#FBBF24,#D97706)'];
   let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((hash << 5) - h);
+  for (let i = 0; i < (name || '').length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
   return colors[Math.abs(h) % colors.length];
 };
 
@@ -52,8 +52,23 @@ export default function AdminUsers() {
     } catch { Swal.fire({ icon: 'error', title: 'Error', text: 'Server error occurred.' }); }
   };
 
+  const PROTECTED_USERNAMES = ['admin', 'dev'];
+
   const handleDelete = async (id, name, username) => {
-    if (users.length <= 1) { Swal.fire({ icon: 'error', title: 'Action Denied', text: 'Cannot delete the last administrator account.' }); return; }
+    if (PROTECTED_USERNAMES.includes((username || '').toLowerCase())) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Permanent Account Protected',
+        text: `The account "@${username}" is a permanent system administrator account and cannot be deleted.`,
+        confirmButtonColor: '#2563EB',
+        borderRadius: '16px'
+      });
+      return;
+    }
+    if (users.length <= 1) {
+      Swal.fire({ icon: 'error', title: 'Action Denied', text: 'Cannot delete the last administrator account.' });
+      return;
+    }
     const r = await Swal.fire({ title: 'Delete Administrator?', html: `Delete admin account for <strong>${name}</strong> (@${username})?`, icon: 'warning', showCancelButton: true, confirmButtonText: 'Delete Account', confirmButtonColor: '#EF4444', cancelButtonColor: '#64748B', borderRadius: '16px' });
     if (!r.isConfirmed) return;
     const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
@@ -272,9 +287,15 @@ export default function AdminUsers() {
 
                       {/* Role Cell */}
                       <td style={{ padding: '14px 20px' }}>
-                        <span className="tailux-badge tailux-badge-primary" style={{ fontSize: '0.72rem', padding: '4px 10px' }}>
-                          <ShieldCheck size={11} /> SUPER ADMIN
-                        </span>
+                        {PROTECTED_USERNAMES.includes((user.username || '').toLowerCase()) ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 800, background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+                            <ShieldCheck size={12} style={{ color: '#2563EB' }} /> PERMANENT MASTER
+                          </span>
+                        ) : (
+                          <span className="tailux-badge tailux-badge-primary" style={{ fontSize: '0.72rem', padding: '4px 10px' }}>
+                            <ShieldCheck size={11} /> SUPER ADMIN
+                          </span>
+                        )}
                       </td>
 
                       {/* Status Cell */}
@@ -296,14 +317,24 @@ export default function AdminUsers() {
                             <Edit2 size={13} /> Edit
                           </button>
 
-                          <button onClick={() => handleDelete(user.id, user.name, user.username)} disabled={users.length <= 1}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, border: '1px solid #FECACA', background: '#FEF2F2', cursor: users.length <= 1 ? 'not-allowed' : 'pointer', color: '#EF4444', fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s', opacity: users.length <= 1 ? 0.4 : 1 }}
-                            onMouseEnter={e => { if (users.length > 1) { e.currentTarget.style.background = '#FEE2E2'; }}}
-                            onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2'; }}
-                            title={users.length <= 1 ? 'Cannot delete last admin' : 'Delete Administrator'}
-                          >
-                            <Trash2 size={13} /> Delete
-                          </button>
+                          {PROTECTED_USERNAMES.includes((user.username || '').toLowerCase()) ? (
+                            <button 
+                              disabled
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', cursor: 'not-allowed', color: '#94A3B8', fontSize: '0.75rem', fontWeight: 700 }}
+                              title="Permanent Master Account (Protected from deletion)"
+                            >
+                              🔒 Protected
+                            </button>
+                          ) : (
+                            <button onClick={() => handleDelete(user.id, user.name, user.username)} disabled={users.length <= 1}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, border: '1px solid #FECACA', background: '#FEF2F2', cursor: users.length <= 1 ? 'not-allowed' : 'pointer', color: '#EF4444', fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s', opacity: users.length <= 1 ? 0.4 : 1 }}
+                              onMouseEnter={e => { if (users.length > 1) { e.currentTarget.style.background = '#FEE2E2'; }}}
+                              onMouseLeave={e => { e.currentTarget.style.background = '#FEF2F2'; }}
+                              title={users.length <= 1 ? 'Cannot delete last admin' : 'Delete Administrator'}
+                            >
+                              <Trash2 size={13} /> Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -45,8 +45,6 @@ const deptBadge = (name) => {
 export default function AdminBookings() {
   const [bookings, setBookings] = useState([]);
   const [venues, setVenues] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [faculties, setFaculties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedBookingDetail, setSelectedBookingDetail] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -71,6 +69,7 @@ export default function AdminBookings() {
 
   // Reschedule form state
   const [rescheduleForm, setRescheduleForm] = useState({
+    venueId: '',
     bookingDate: '',
     startTime: '10:00',
     endTime: '12:00'
@@ -90,6 +89,7 @@ export default function AdminBookings() {
       bookedBy: b.coordinator || ''
     });
     setRescheduleForm({
+      venueId: b.venueId || '',
       bookingDate: b.bookingDate || new Date().toISOString().split('T')[0],
       startTime: b.startTime || '10:00',
       endTime: b.endTime || '12:00'
@@ -151,15 +151,13 @@ export default function AdminBookings() {
 
   const fetchData = async () => {
     try {
-      const [bRes, vRes, dRes, fRes] = await Promise.all([fetch('/api/bookings'), fetch('/api/venues'), fetch('/api/departments'), fetch('/api/faculty')]);
-      const [bData, vData, dData, fData] = await Promise.all([bRes.json(), vRes.json(), dRes.json(), fRes.json()]);
+      const [bRes, vRes] = await Promise.all([fetch('/api/bookings'), fetch('/api/venues')]);
+      const [bData, vData] = await Promise.all([bRes.json(), vRes.json()]);
       if (Array.isArray(bData)) {
         bData.sort((a, b) => b.id.localeCompare(a.id));
         setBookings(bData);
       }
       if (Array.isArray(vData)) setVenues(vData);
-      if (Array.isArray(dData)) setDepartments(dData);
-      if (Array.isArray(fData)) setFaculties(fData);
       setLoading(false);
     } catch (err) { console.error(err); setLoading(false); }
   };
@@ -218,9 +216,8 @@ export default function AdminBookings() {
     }
     const headers = ['Booking ID', 'Event Name', 'Venue Name', 'Booking Date', 'Start Time', 'End Time', 'Faculty Name', 'Department Name', 'Attendees', 'Status'];
     const rows = filteredBookings.map(b => {
-      const fac = faculties.find(f => f.id === b.facultyId);
-      const facName = b.facultyName || fac?.name || b.coordinator || 'Unknown';
-      const deptName = b.departmentName || getDeptName(b.departmentId) || '';
+      const facName = b.facultyName || b.coordinator || 'Unknown';
+      const deptName = b.departmentName || '';
       return [
         b.id || '',
         b.eventName || '',
@@ -246,15 +243,13 @@ export default function AdminBookings() {
   };
 
   const getVenueName = id => venues.find(v => v.id === id)?.name || id;
-  const getDeptName = id => (id ? (departments.find(d => d.id === id)?.name || id) : '');
 
   const filteredBookings = bookings.filter(b => {
     const venueMatch = venueFilter === 'All' || b.venueId === venueFilter;
     const q = searchQuery.toLowerCase().trim();
     if (!q) return venueMatch;
-    const fac = faculties.find(f => f.id === b.facultyId);
-    const facName = b.facultyName || fac?.name || b.coordinator || '';
-    const deptName = b.departmentName || getDeptName(b.departmentId) || '';
+    const facName = b.facultyName || b.coordinator || '';
+    const deptName = b.departmentName || '';
     return venueMatch && (
       (b.eventName || '').toLowerCase().includes(q) || 
       (b.id || '').toLowerCase().includes(q) || 
@@ -440,9 +435,8 @@ export default function AdminBookings() {
               </thead>
               <tbody>
                 {paginatedBookings.map((b, idx) => {
-                  const fac = faculties.find(f => f.id === b.facultyId);
-                  const facultyName = b.facultyName || fac?.name || b.coordinator || '—';
-                  const deptName = b.departmentName || getDeptName(b.departmentId) || '—';
+                  const facultyName = b.facultyName || b.coordinator || '—';
+                  const deptName = b.departmentName || '—';
                   const venueName = getVenueName(b.venueId);
 
                   return (
@@ -500,9 +494,6 @@ export default function AdminBookings() {
                           </div>
                           <div>
                             <div style={{ fontWeight: 750, color: '#0F172A', fontSize: '0.87rem' }}>{facultyName}</div>
-                            {fac?.designation && (
-                              <div style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 500 }}>{fac.designation}</div>
-                            )}
                           </div>
                         </div>
                       </td>
@@ -691,10 +682,10 @@ export default function AdminBookings() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
                   <div>
                     <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1E3A8A' }}>
-                      {selectedBookingDetail.facultyName || faculties.find(f => f.id === selectedBookingDetail.facultyId)?.name || selectedBookingDetail.coordinator || 'Unknown Faculty'}
+                      {selectedBookingDetail.facultyName || selectedBookingDetail.coordinator || 'Unknown Faculty'}
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#3B82F6', fontWeight: 600 }}>
-                      Department: {selectedBookingDetail.departmentName || getDeptName(selectedBookingDetail.departmentId) || 'N/A'}
+                      Department: {selectedBookingDetail.departmentName || 'N/A'}
                     </div>
                     {(selectedBookingDetail.classYear || selectedBookingDetail.className) && (
                       <div style={{ fontSize: '0.75rem', color: '#1D4ED8', fontWeight: 700, marginTop: 2 }}>
@@ -840,36 +831,51 @@ export default function AdminBookings() {
               )}
 
               {overrideAction === 'reschedule' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>New Date *</label>
-                    <input
-                      type="date"
+                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Venue / Hall *</label>
+                    <select
                       required
-                      value={rescheduleForm.bookingDate}
-                      onChange={e => setRescheduleForm({ ...rescheduleForm, bookingDate: e.target.value })}
-                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
-                    />
+                      value={rescheduleForm.venueId}
+                      onChange={e => setRescheduleForm({ ...rescheduleForm, venueId: e.target.value })}
+                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem', background: '#FFFFFF' }}
+                    >
+                      {venues.map(v => (
+                        <option key={v.id} value={v.id}>{v.name} ({v.capacity} seats)</option>
+                      ))}
+                    </select>
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Start Time *</label>
-                    <input
-                      type="time"
-                      required
-                      value={rescheduleForm.startTime}
-                      onChange={e => setRescheduleForm({ ...rescheduleForm, startTime: e.target.value })}
-                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>End Time *</label>
-                    <input
-                      type="time"
-                      required
-                      value={rescheduleForm.endTime}
-                      onChange={e => setRescheduleForm({ ...rescheduleForm, endTime: e.target.value })}
-                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
-                    />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>New Date *</label>
+                      <input
+                        type="date"
+                        required
+                        value={rescheduleForm.bookingDate}
+                        onChange={e => setRescheduleForm({ ...rescheduleForm, bookingDate: e.target.value })}
+                        style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>Start Time *</label>
+                      <input
+                        type="time"
+                        required
+                        value={rescheduleForm.startTime}
+                        onChange={e => setRescheduleForm({ ...rescheduleForm, startTime: e.target.value })}
+                        style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: 4 }}>End Time *</label>
+                      <input
+                        type="time"
+                        required
+                        value={rescheduleForm.endTime}
+                        onChange={e => setRescheduleForm({ ...rescheduleForm, endTime: e.target.value })}
+                        style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1px solid #CBD5E1', fontSize: '0.8rem' }}
+                      />
+                    </div>
                   </div>
                 </div>
               )}

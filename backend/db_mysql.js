@@ -4,10 +4,10 @@ const mysql = require('mysql2/promise');
 // Using a pool is a best practice because it manages multiple active connections
 // and recycles them, avoiding the overhead of opening a new connection for every HTTP request.
 const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: '12345678', // Your MySQL root password
-  database: 'auditorium_db',
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '12345678',
+  database: process.env.DB_NAME || 'auditorium_db',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -77,7 +77,40 @@ const pool = mysql.createPool({
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('Database Migration: Verified audit logs and notifications tables.');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(50) PRIMARY KEY,
+        username VARCHAR(100) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        name VARCHAR(150) NOT NULL
+      )
+    `);
+
+    // Ensure permanent protected admin accounts exist
+    const [allCurrentUsers] = await pool.query('SELECT * FROM users');
+    const existingUsernames = allCurrentUsers.map(u => (u.username || '').toLowerCase());
+
+    if (!existingUsernames.includes('admin')) {
+      await pool.query('INSERT INTO users (id, username, password, name) VALUES (?, ?, ?, ?)', [
+        'user_master_admin',
+        'admin',
+        'admin123',
+        'System Admin'
+      ]);
+      console.log('Database Migration: Verified permanent admin user (admin / admin123).');
+    }
+
+    if (!existingUsernames.includes('dev')) {
+      await pool.query('INSERT INTO users (id, username, password, name) VALUES (?, ?, ?, ?)', [
+        'user_master_dev',
+        'dev',
+        '123',
+        'Tushal'
+      ]);
+      console.log('Database Migration: Verified permanent dev user (dev / 123).');
+    }
+
+    console.log('Database Migration: Verified audit logs, notifications, and permanent users tables.');
   } catch (err) {
     console.error('Migration Warning:', err.message);
   }
@@ -122,6 +155,14 @@ const dbMysql = {
     return rows[0] || null;
   },
   deleteUser: async (id) => {
+    // Permanent Protection: Do not allow deletion of 'admin' or 'dev'
+    const rows = await query('SELECT * FROM users WHERE id = ?', [id]);
+    if (rows.length > 0) {
+      const uname = (rows[0].username || '').toLowerCase();
+      if (uname === 'admin' || uname === 'dev') {
+        throw new Error(`Cannot delete permanent protected master account: @${rows[0].username}`);
+      }
+    }
     const result = await query('DELETE FROM users WHERE id = ?', [id]);
     return result.affectedRows > 0;
   },

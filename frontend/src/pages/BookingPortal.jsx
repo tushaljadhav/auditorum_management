@@ -68,8 +68,6 @@ export default function BookingPortal() {
   const [slotCurrentPage, setSlotCurrentPage] = useState(1);
 
   // Database lists
-  const [departments, setDepartments] = useState([]);
-  const [faculties, setFaculties] = useState([]);
 
   const [venues, setVenues] = useState([]);
 
@@ -106,16 +104,6 @@ export default function BookingPortal() {
 
   // Load lists on mount
   useEffect(() => {
-    fetch('/api/departments')
-      .then(res => res.json())
-      .then(data => setDepartments(data))
-      .catch(err => console.error("Error loading departments:", err));
-
-    fetch('/api/faculty')
-      .then(res => res.json())
-      .then(data => setFaculties(data))
-      .catch(err => console.error("Error loading faculty:", err));
-
     fetch('/api/venues')
       .then(res => res.json())
       .then(data => setVenues(data))
@@ -270,18 +258,14 @@ export default function BookingPortal() {
     setTrackedResults([]);
     setSelectedTrackedBooking(null);
     try {
-      const [bRes, vRes, dRes, fRes] = await Promise.all([
+      const [bRes, vRes] = await Promise.all([
         fetch('/api/bookings'),
-        fetch('/api/venues'),
-        fetch('/api/departments'),
-        fetch('/api/faculty')
+        fetch('/api/venues')
       ]);
 
       if (bRes.ok) {
         const bookingsList = await bRes.json();
         const vList = vRes.ok ? await vRes.json() : [];
-        const dList = dRes.ok ? await dRes.json() : [];
-        const fList = fRes.ok ? await fRes.json() : [];
 
         const enrichedList = bookingsList.map(b => {
           const venue = vList.find(v => v.id === b.venueId);
@@ -716,7 +700,7 @@ export default function BookingPortal() {
 
   const downloadPDFReceipt = async (booking = bookingResult) => {
     if (!booking) return;
-    await downloadOfficialReceiptPDF(booking, faculties, venues, departments);
+    await downloadOfficialReceiptPDF(booking, [], venues, []);
   };
 
   useEffect(() => {
@@ -1771,9 +1755,10 @@ export default function BookingPortal() {
 
                     {/* Smart Capacity Overbooking Warning Box */}
                     {(() => {
-                      const selVenue = venues.find(v => v.id === bookingForm.venueId);
+                      const currentVenueId = bookingForm.venueId || availForm.venueId;
+                      const selVenue = venues.find(v => v.id === currentVenueId);
                       const isOver = selVenue && Number(bookingForm.attendees) > Number(selVenue.capacity);
-                      const largerHalls = venues.filter(v => v.id !== bookingForm.venueId && v.status !== 'Maintenance' && Number(v.capacity) >= Number(bookingForm.attendees));
+                      const largerHalls = venues.filter(v => v.id !== currentVenueId && v.status !== 'Maintenance' && Number(v.capacity) >= Number(bookingForm.attendees));
                       if (!isOver) return null;
                       return (
                         <div className="col-12 animate-fade-in" style={{ marginTop: 4 }}>

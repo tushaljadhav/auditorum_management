@@ -698,21 +698,28 @@ app.patch('/api/bookings/:id/override', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'New booking date, start time, and end time are required for rescheduling.' });
       }
 
-      // Check slot availability for new date/time
-      const isAvailable = await dbMysql.isSlotAvailable(targetBooking.venueId, newDetails.bookingDate, newDetails.startTime, newDetails.endTime, bookingId);
+      // Use new venueId if provided, otherwise keep the original
+      const targetVenueId = newDetails.venueId || targetBooking.venueId;
+
+      // Check slot availability for new date/time/venue
+      const isAvailable = await dbMysql.isSlotAvailable(targetVenueId, newDetails.bookingDate, newDetails.startTime, newDetails.endTime, bookingId);
       if (!isAvailable) {
         return res.status(409).json({ error: 'Target slot conflicts with an existing booking at this venue.' });
       }
 
       updatedBooking = await dbMysql.updateBooking(bookingId, {
+        venueId: targetVenueId,
         bookingDate: newDetails.bookingDate,
         startTime: newDetails.startTime,
         endTime: newDetails.endTime,
         status: 'rescheduled'
       });
 
+      const venuesList = await dbMysql.getVenues();
+      const newVenueName = venuesList.find(v => v.id === targetVenueId)?.name || targetVenueId;
+
       notificationTitle = `Booking Rescheduled by Admin: ${targetBooking.eventName}`;
-      notificationMsg = `Your auditorium booking "${targetBooking.eventName}" has been rescheduled by Administrator to ${newDetails.bookingDate} (${newDetails.startTime} - ${newDetails.endTime}). Reason: "${reason.trim()}".`;
+      notificationMsg = `Your auditorium booking "${targetBooking.eventName}" has been rescheduled by Administrator to ${newDetails.bookingDate} (${newDetails.startTime} - ${newDetails.endTime}) at ${newVenueName}. Reason: "${reason.trim()}".`;
     }
 
     const newSnapshot = JSON.stringify(updatedBooking);
@@ -834,11 +841,19 @@ app.put('/api/users/:id', requireAuth, async (req, res) => {
 
 app.delete('/api/users/:id', requireAuth, async (req, res) => {
   try {
-    // Prevent deleting the last remaining admin
     const users = await dbMysql.getUsers();
     if (users.length <= 1) {
       return res.status(400).json({ error: 'Cannot delete the last admin user.' });
     }
+
+    const targetUser = users.find(u => u.id === req.params.id);
+    if (targetUser) {
+      const uname = (targetUser.username || '').toLowerCase();
+      if (uname === 'admin' || uname === 'dev') {
+        return res.status(403).json({ error: `Cannot delete permanent master admin account (@${targetUser.username}).` });
+      }
+    }
+
     const success = await dbMysql.deleteUser(req.params.id);
     res.json({ success });
   } catch (err) {
@@ -1011,6 +1026,101 @@ app.post('/api/attendance/mark', async (req, res) => {
 });
 
 // --- Admin System Backup & Restore APIs ---
+
+// Helper: Build an HTML table sheet for Excel export
+function buildExcelSheet(sheetName, headers, rows) {
+  const thStyle = 'style="background-color: #1E3A8A; color: #FFFFFF; font-weight: bold; padding: 10px 14px; border: 1px solid #1E40AF; text-align: left;"';
+  const tableHeader = headers.map(h => `<th ${thStyle}>${h}</th>`).join('');
+  const tableBody = rows.map((row, rIdx) => {
+    const bg = rIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+    const cells = row.map(cell => {
+      const val = cell !== undefined && cell !== null ? String(cell) : '';
+      return `<td style="padding: 8px 12px; border: 1px solid #CBD5E1; background-color: ${bg}; mso-number-format:'\\@';">${val.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  return `<Worksheet ss:Name="${sheetName}"><Table>${tableHeader ? `<Row>${headers.map(h => `<Cell><Data ss:Type="String">${h}</Data></Cell>`).join('')}</Row>` : ''}${rows.map(row => `<Row>${row.map(cell => `<Cell><Data ss:Type="String">${cell !== undefined && cell !== null ? String(cell).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`;
+}
+
+// Helper: Build full multi-sheet Excel workbook (HTML table format for .xls compat)
+function buildMultiSheetExcel(sheets) {
+  const thStyle = `background-color: #1E3A8A; color: #FFFFFF; font-weight: bold; padding: 10px 14px; border: 1px solid #1E40AF; text-align: left;`;
+
+  let sheetsHtml = '';
+  for (const sheet of sheets) {
+    const headerRow = sheet.headers.map(h => `<th style="${thStyle}">${h}</th>`).join('');
+    const bodyRows = sheet.rows.map((row, rIdx) => {
+      const bg = rIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      const cells = row.map(cell => {
+        const val = cell !== undefined && cell !== null ? String(cell) : '';
+        return `<td style="padding: 8px 12px; border: 1px solid #CBD5E1; background-color: ${bg}; mso-number-format:'\\@';">${val.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      }).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('');
+
+    sheetsHtml += `
+      <x:ExcelWorksheet>
+        <x:Name>${sheet.name}</x:Name>
+        <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+      </x:ExcelWorksheet>`;
+  }
+
+  // Build workbook HTML (all sheets as separate tables separated by page breaks)
+  let tablesHtml = '';
+  for (const sheet of sheets) {
+    const headerRow = sheet.headers.map(h => `<th style="${thStyle}">${h}</th>`).join('');
+    const bodyRows = sheet.rows.map((row, rIdx) => {
+      const bg = rIdx % 2 === 0 ? '#FFFFFF' : '#F8FAFC';
+      const cells = row.map(cell => {
+        const val = cell !== undefined && cell !== null ? String(cell) : '';
+        return `<td style="padding: 8px 12px; border: 1px solid #CBD5E1; background-color: ${bg}; mso-number-format:'\\@';">${val.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+      }).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('');
+
+    tablesHtml += `
+      <div style="page-break-after: always;">
+        <h2 style="font-family: Calibri, Arial, sans-serif; color: #1E3A8A; margin-bottom: 8px;">${sheet.name}</h2>
+        <table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Calibri, Arial, sans-serif; font-size: 11pt;">
+          <thead><tr>${headerRow}</tr></thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <!--[if gte mso 9]>
+  <xml>
+    <x:ExcelWorkbook>
+      <x:ExcelWorksheets>${sheetsHtml}</x:ExcelWorksheets>
+    </x:ExcelWorkbook>
+  </xml>
+  <![endif]-->
+  <style>
+    table { border-collapse: collapse; width: 100%; font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
+    th { background-color: #1E3A8A !important; color: #FFFFFF !important; font-weight: bold; text-align: left; padding: 10px 14px; border: 1px solid #1E40AF; }
+    td { padding: 8px 12px; border: 1px solid #CBD5E1; }
+  </style>
+</head>
+<body>${tablesHtml}</body>
+</html>`;
+}
+
+// Helper: Format 24h time to 12h AM/PM
+function formatTime12h(timeStr) {
+  if (!timeStr) return '';
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let h = parseInt(parts[0], 10);
+  const m = parts[1];
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
+}
+
 app.get('/api/admin/backup', async (req, res) => {
   try {
     const [users, departments, faculty, venues, bookings, attendance, designations] = await Promise.all([
@@ -1023,26 +1133,56 @@ app.get('/api/admin/backup', async (req, res) => {
       dbMysql.getDesignations ? dbMysql.getDesignations() : []
     ]);
 
-    const backupData = {
-      system: "Kirti M. Doongursee College Auditorium System",
-      version: "2.0",
-      backupDate: new Date().toISOString(),
-      timestamp: Date.now(),
-      data: {
-        users,
-        departments,
-        faculty,
-        venues,
-        bookings,
-        attendance,
-        designations
+    // Build multi-sheet Excel workbook
+    const sheets = [
+      {
+        name: 'Bookings',
+        headers: ['Booking ID', 'Event Name', 'Department', 'Faculty Name', 'Venue ID', 'Date', 'Start Time', 'End Time', 'Attendees', 'Status', 'Class/Year', 'Coordinator', 'Email', 'Phone', 'Description'],
+        rows: bookings.map(b => [
+          b.id, b.eventName, b.departmentName || '', b.facultyName || '', b.venueId || '',
+          b.bookingDate, formatTime12h(b.startTime), formatTime12h(b.endTime),
+          b.attendees || 0, b.status || 'Confirmed', b.classYear || '',
+          b.coordinator || '', b.email || '', b.phone || '', b.eventDescription || ''
+        ])
+      },
+      {
+        name: 'Venues',
+        headers: ['Venue ID', 'Name', 'Capacity', 'Location', 'Address', 'Latitude', 'Longitude', 'Radius (m)', 'Status'],
+        rows: venues.map(v => [
+          v.id, v.name, v.capacity, v.location || '', v.address || '',
+          v.latitude || '', v.longitude || '', v.radius || 50, v.status || 'Active'
+        ])
+      },
+      {
+        name: 'Departments',
+        headers: ['Department ID', 'Name'],
+        rows: departments.map(d => [d.id, d.name])
+      },
+      {
+        name: 'Faculty',
+        headers: ['Faculty ID', 'Name', 'Email', 'Mobile', 'Department ID'],
+        rows: faculty.map(f => [f.id, f.name, f.email || '', f.mobile || '', f.departmentId || ''])
+      },
+      {
+        name: 'Attendance',
+        headers: ['ID', 'Booking ID', 'Roll Number', 'Student Name', 'Class/Stream', 'Latitude', 'Longitude', 'Distance (m)', 'Check-in Time'],
+        rows: attendance.map(a => [
+          a.id, a.bookingId, a.rollNumber, a.studentName, a.classStream || '',
+          a.latitude || '', a.longitude || '', a.distanceFromVenue || '', a.checkInTime || ''
+        ])
+      },
+      {
+        name: 'Admin Users',
+        headers: ['User ID', 'Username', 'Name'],
+        rows: users.map(u => [u.id, u.username, u.name])
       }
-    };
+    ];
 
-    const fileName = `auditorium_system_backup_${new Date().toISOString().split('T')[0]}.json`;
-    res.setHeader('Content-Type', 'application/json');
+    const excelContent = buildMultiSheetExcel(sheets);
+    const fileName = `Auditorium_System_Backup_${new Date().toISOString().split('T')[0]}.xls`;
+    res.setHeader('Content-Type', 'application/vnd.ms-excel');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.send(JSON.stringify(backupData, null, 2));
+    res.send('\uFEFF' + excelContent);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
