@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 import CustomSelect from '../components/CustomSelect';
-import { Plus, Edit2, Trash2, X, Mail, Phone, Users, Settings2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Mail, Phone, Users, Settings2, ChevronLeft, ChevronRight, Check, UserX, Clock } from 'lucide-react';
 
 const S = {
   card: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: 'var(--shadow-sm)', overflow: 'hidden' },
@@ -52,6 +52,7 @@ export default function AdminFaculty() {
   const [editingTitleName, setEditingTitleName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [deptFilter, setDeptFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [form, setForm] = useState({ name: '', email: '', mobile: '', departmentId: '', designationId: '' });
@@ -67,7 +68,7 @@ export default function AdminFaculty() {
   };
 
   useEffect(() => { fetchData(); }, []);
-  useEffect(() => { setCurrentPage(1); }, [searchQuery, deptFilter]);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, deptFilter, statusFilter]);
 
   const openAddModal = () => { setEditingFaculty(null); setForm({ name: '', email: '', mobile: '', departmentId: '', designationId: '' }); setModalOpen(true); };
   const openEditModal = (fac) => { setEditingFaculty(fac); setForm({ name: fac.name, email: fac.email, mobile: fac.mobile, departmentId: fac.departmentId, designationId: fac.designationId || '' }); setModalOpen(true); };
@@ -90,6 +91,40 @@ export default function AdminFaculty() {
       if (res.ok) { Swal.fire({ icon: 'success', title: editingFaculty ? 'Faculty Updated' : 'Faculty Added', timer: 1500, showConfirmButton: false }); setModalOpen(false); fetchData(); }
       else { const err = await res.json(); Swal.fire({ icon: 'error', title: 'Error', text: err.error || 'Failed.' }); }
     } catch { Swal.fire({ icon: 'error', title: 'Error', text: 'Server error occurred.' }); }
+  };
+
+  const handleStatusChange = async (id, name, newStatus) => {
+    const actionLabel = newStatus === 'Approved' ? 'Approve' : newStatus === 'Rejected' ? 'Reject' : 'Reset';
+    const confirm = await Swal.fire({
+      title: `${actionLabel} ${name}?`,
+      text: newStatus === 'Approved'
+        ? 'User will immediately be able to log in to the Mobile App using their registered phone number.'
+        : 'User will be blocked from logging into the mobile app.',
+      icon: newStatus === 'Approved' ? 'question' : 'warning',
+      showCancelButton: true,
+      confirmButtonText: `Yes, ${actionLabel}`,
+      confirmButtonColor: newStatus === 'Approved' ? '#10B981' : '#EF4444',
+      cancelButtonColor: '#64748B',
+      borderRadius: '16px'
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+      const res = await fetch(`/api/faculty/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        Swal.fire({ icon: 'success', title: `Status: ${newStatus}`, timer: 1200, showConfirmButton: false });
+        fetchData();
+      } else {
+        const err = await res.json();
+        Swal.fire({ icon: 'error', title: 'Error', text: err.error || 'Failed to update status.' });
+      }
+    } catch {
+      Swal.fire({ icon: 'error', title: 'Error', text: 'Server error occurred.' });
+    }
   };
 
   const handleDelete = async (id, name) => {
@@ -124,11 +159,24 @@ export default function AdminFaculty() {
   const getDeptName = (id) => departments.find(d => d.id === id)?.name || 'Unknown';
   const getDesigName = (id) => designations.find(d => d.id === id)?.name || '';
 
+  const pendingCount = faculty.filter(f => (f.status || 'Pending').toLowerCase() === 'pending').length;
+  const approvedCount = faculty.filter(f => {
+    const s = (f.status || '').toLowerCase();
+    return s === 'approved' || s === 'active';
+  }).length;
+  const rejectedCount = faculty.filter(f => (f.status || '').toLowerCase() === 'rejected').length;
+
   const filteredFaculty = faculty.filter(f => {
     const deptMatch = deptFilter === 'All' || f.departmentId === deptFilter;
+    const st = (f.status || 'Pending').toLowerCase();
+    const statusMatch = statusFilter === 'All' ||
+      (statusFilter === 'Pending' && st === 'pending') ||
+      (statusFilter === 'Approved' && (st === 'approved' || st === 'active')) ||
+      (statusFilter === 'Rejected' && st === 'rejected');
+
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return deptMatch;
-    return deptMatch && (f.name.toLowerCase().includes(q) || f.email.toLowerCase().includes(q) || (f.mobile || '').includes(q));
+    if (!q) return deptMatch && statusMatch;
+    return deptMatch && statusMatch && (f.name.toLowerCase().includes(q) || f.email.toLowerCase().includes(q) || (f.mobile || '').includes(q));
   });
 
   const totalEntries = filteredFaculty.length;
@@ -186,8 +234,51 @@ export default function AdminFaculty() {
       {/* Tailux Filter Bar */}
       <div className="tailux-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: '1 1 300px' }}>
-          <div style={{ position: 'relative', flex: '1 1 220px' }}>
-            <input type="text" placeholder="Search faculty name, email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+          {/* Status Filter Tabs */}
+          <div style={{ display: 'flex', gap: 6, background: '#F1F5F9', padding: '4px', borderRadius: 10 }}>
+            {[
+              { id: 'All', label: 'All', count: faculty.length },
+              { id: 'Pending', label: 'Pending', count: pendingCount, color: '#D97706' },
+              { id: 'Approved', label: 'Approved', count: approvedCount, color: '#059669' },
+              { id: 'Rejected', label: 'Rejected', count: rejectedCount, color: '#DC2626' }
+            ].map(tab => {
+              const active = statusFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setStatusFilter(tab.id)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: active ? '#FFFFFF' : 'transparent',
+                    color: active ? (tab.color || '#0F172A') : '#64748B',
+                    fontWeight: active ? 800 : 600,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none'
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    padding: '1px 6px',
+                    borderRadius: 999,
+                    background: active ? '#F8FAFC' : '#E2E8F0',
+                    color: tab.color || '#475569'
+                  }}>
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ position: 'relative', flex: '1 1 200px' }}>
+            <input type="text" placeholder="Search faculty name, email, phone..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               style={{ 
                 width: '100%', padding: '8px 12px', fontSize: '0.85rem', color: '#0F172A', 
                 background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, outline: 'none', 
@@ -197,7 +288,7 @@ export default function AdminFaculty() {
               onBlur={e => { e.target.style.borderColor = '#E2E8F0'; e.target.style.background = '#F8FAFC'; }}
             />
           </div>
-          <div style={{ width: '100%', minWidth: 160, maxWidth: 200, flex: '1 1 160px' }}>
+          <div style={{ width: '100%', minWidth: 150, maxWidth: 180, flex: '1 1 150px' }}>
             <CustomSelect value={deptFilter} onChange={setDeptFilter} options={deptOptions} placeholder="All Departments" />
           </div>
         </div>
@@ -222,7 +313,7 @@ export default function AdminFaculty() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                  {['Faculty Member', 'Department', 'Contact Info', 'Actions'].map(h => (
+                  {['Faculty Member', 'Department', 'Contact Info', 'App Login Access', 'Actions'].map(h => (
                     <th key={h} style={{ 
                       padding: '12px 18px', fontSize: '0.72rem', fontWeight: 750, 
                       textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', 
@@ -236,6 +327,11 @@ export default function AdminFaculty() {
               <tbody>
                 {paginatedFaculty.map((fac, idx) => {
                   const initial = fac.name ? fac.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'F';
+                  const st = (fac.status || 'Pending').toLowerCase();
+                  const isPending = st === 'pending';
+                  const isApproved = st === 'approved' || st === 'active';
+                  const isRejected = st === 'rejected';
+
                   return (
                     <tr key={fac.id}
                       style={{ borderBottom: idx === paginatedFaculty.length - 1 ? 'none' : '1px solid #F1F5F9', transition: 'background 0.12s ease' }}
@@ -267,6 +363,61 @@ export default function AdminFaculty() {
                           </a>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: '#64748B' }}>
                             <Phone size={13} style={{ flexShrink: 0 }} /> {fac.mobile?.startsWith('+') ? fac.mobile : `+91 ${fac.mobile}`}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* App Login Access Status & Quick Toggle */}
+                      <td style={{ padding: '16px 18px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            padding: '3px 9px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 800, width: 'fit-content',
+                            background: isApproved ? '#ECFDF5' : isRejected ? '#FEF2F2' : '#FFFBEB',
+                            color: isApproved ? '#047857' : isRejected ? '#B91C1C' : '#B45309',
+                            border: `1px solid ${isApproved ? '#A7F3D0' : isRejected ? '#FECACA' : '#FDE68A'}`
+                          }}>
+                            {isPending && <Clock size={11} />}
+                            {isApproved && <Check size={11} />}
+                            {isRejected && <UserX size={11} />}
+                            {fac.status || 'Pending'}
+                          </span>
+
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {isPending ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStatusChange(fac.id, fac.name, 'Approved')}
+                                  style={{ padding: '3px 8px', borderRadius: 6, border: 'none', background: '#10B981', color: '#FFF', fontSize: '0.72rem', fontWeight: 750, cursor: 'pointer' }}
+                                >
+                                  ✓ Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStatusChange(fac.id, fac.name, 'Rejected')}
+                                  style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #FECACA', background: '#FEF2F2', color: '#DC2626', fontSize: '0.72rem', fontWeight: 750, cursor: 'pointer' }}
+                                >
+                                  ✕ Reject
+                                </button>
+                              </>
+                            ) : isApproved ? (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusChange(fac.id, fac.name, 'Rejected')}
+                                style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #FECACA', background: '#FFFFFF', color: '#DC2626', fontSize: '0.72rem', fontWeight: 650, cursor: 'pointer' }}
+                              >
+                                Block / Reject
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusChange(fac.id, fac.name, 'Approved')}
+                                style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid #A7F3D0', background: '#ECFDF5', color: '#059669', fontSize: '0.72rem', fontWeight: 650, cursor: 'pointer' }}
+                              >
+                                Re-Approve
+                              </button>
+                            )}
                           </div>
                         </div>
                       </td>

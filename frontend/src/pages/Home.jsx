@@ -1,17 +1,41 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import InteractiveCalendar from '../components/InteractiveCalendar';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import FacultyPassModal from '../components/FacultyPassModal';
+import AdminPassModal from '../components/AdminPassModal';
+import { isFacultyAuthorized } from '../utils/facultyAuth';
+import { isAdminAuthorized } from '../utils/adminAuth';
 import { 
   Calendar, MapPin, ShieldCheck, Users, Clock, Bell, 
   BarChart3, HelpCircle, ArrowRight, Activity, Copy, Download, Mail, Phone, 
-  Globe, Laptop, Award, Lock, ArrowUp
+  Globe, Laptop, Award, Lock, ArrowUp, Shield
 } from 'lucide-react';
 
 export default function Home() {
   const navigate = useNavigate();
+  const [facultyModalOpen, setFacultyModalOpen] = useState(false);
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [pendingNavPath, setPendingNavPath] = useState('/faculty-access');
+
+  const handleFacultyAccessClick = (targetPath = '/faculty-access') => {
+    if (isFacultyAuthorized()) {
+      navigate(targetPath);
+    } else {
+      setPendingNavPath(targetPath);
+      setFacultyModalOpen(true);
+    }
+  };
+
+  const handleAdminAccessClick = (targetPath = '/admin-access') => {
+    if (isAdminAuthorized()) {
+      navigate(targetPath);
+    } else {
+      setAdminModalOpen(true);
+    }
+  };
 
   return (
     <div style={{ 
@@ -353,7 +377,7 @@ export default function Home() {
               flexDirection: 'column',
               cursor: 'pointer'
             }}
-            onClick={() => navigate('/booking')}
+            onClick={() => handleFacultyAccessClick('/faculty-access')}
             onMouseEnter={e => {
               e.currentTarget.style.transform = 'translateY(-8px)';
               e.currentTarget.style.borderColor = '#6366F1';
@@ -440,7 +464,7 @@ export default function Home() {
               </div>
 
               <button
-                onClick={(e) => { e.stopPropagation(); navigate('/booking'); }}
+                onClick={(e) => { e.stopPropagation(); handleFacultyAccessClick('/faculty-access'); }}
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -470,7 +494,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Card 2: Student Attendance */}
+          {/* Card 2: Admin Management Portal */}
           <div
             style={{
               background: '#FFFFFF',
@@ -483,11 +507,11 @@ export default function Home() {
               flexDirection: 'column',
               cursor: 'pointer'
             }}
-            onClick={() => navigate('/attendance')}
+            onClick={() => handleAdminAccessClick('/admin-access')}
             onMouseEnter={e => {
               e.currentTarget.style.transform = 'translateY(-8px)';
-              e.currentTarget.style.borderColor = '#6366F1';
-              e.currentTarget.style.boxShadow = '0 20px 40px -10px rgba(99, 102, 241, 0.22)';
+              e.currentTarget.style.borderColor = '#0F172A';
+              e.currentTarget.style.boxShadow = '0 20px 40px -10px rgba(15, 23, 42, 0.25)';
             }}
             onMouseLeave={e => {
               e.currentTarget.style.transform = 'translateY(0)';
@@ -497,7 +521,7 @@ export default function Home() {
           >
             {/* Header Visual Box */}
             <div style={{
-              background: 'linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%)',
+              background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%)',
               padding: '28px',
               color: '#FFFFFF',
               position: 'relative',
@@ -525,23 +549,23 @@ export default function Home() {
                   fontWeight: 800,
                   padding: '4px 12px',
                   borderRadius: '20px',
-                  background: '#EEF2FF',
-                  color: '#4F46E5',
+                  background: '#FEF3C7',
+                  color: '#92400E',
                   letterSpacing: '0.03em'
                 }}>
-                  Student Gateway
+                  Admin Gateway
                 </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#4ADE80', fontWeight: 700 }}>
-                  <span className="tailux-pulse-dot" /> GPS Geofence Active
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#34D399', fontWeight: 700 }}>
+                  <span className="tailux-pulse-dot" style={{ background: '#34D399' }} /> Master Control Live
                 </div>
               </div>
 
               <div style={{ marginTop: 14, position: 'relative', zIndex: 1 }}>
                 <h3 className="text-white" style={{ margin: 0, fontSize: '1.45rem', fontWeight: 800, color: '#FFFFFF', WebkitTextFillColor: '#FFFFFF', opacity: 1, letterSpacing: '-0.01em' }}>
-                  Student Attendance
+                  Admin Management Portal
                 </h3>
-                <p style={{ margin: '6px 0 0', fontSize: '0.83rem', color: '#C7D2FE', lineHeight: 1.45 }}>
-                  Verify and mark your attendance securely using your location details.
+                <p style={{ margin: '6px 0 0', fontSize: '0.83rem', color: '#CBD5E1', lineHeight: 1.45 }}>
+                  Oversee hall bookings, manage maintenance locks, faculty registrations, and system backups.
                 </p>
               </div>
             </div>
@@ -550,18 +574,18 @@ export default function Home() {
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20, flex: 1, justifyContent: 'space-between', background: 'linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)' }}>
               <div>
                 <div style={{ fontSize: '0.72rem', fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748B', marginBottom: 12 }}>
-                  Gateway Features & Security
+                  Master Control Features
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {['GPS Location Verification', 'Live Distance Radar', 'Instant Check-In', 'Verified Attendance Log'].map(f => (
+                  {['Hall Approvals & Overrides', 'Venue Maintenance Lock', '1-Click Data Backup', 'User & Faculty Management'].map(f => (
                     <span key={f} style={{
                       fontSize: '0.78rem',
                       fontWeight: 650,
                       padding: '6px 12px',
                       borderRadius: '8px',
-                      background: '#F5F3FF',
-                      color: '#4338CA',
-                      border: '1px solid #DDD6FE'
+                      background: '#F1F5F9',
+                      color: '#0F172A',
+                      border: '1px solid #CBD5E1'
                     }}>
                       ✓ {f}
                     </span>
@@ -570,12 +594,12 @@ export default function Home() {
               </div>
 
               <button
-                onClick={(e) => { e.stopPropagation(); navigate('/attendance'); }}
+                onClick={(e) => { e.stopPropagation(); handleAdminAccessClick('/admin-access'); }}
                 style={{
                   width: '100%',
                   padding: '12px',
                   borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+                  background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
                   border: 'none',
                   color: '#FFFFFF',
                   fontSize: '0.9rem',
@@ -585,7 +609,7 @@ export default function Home() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  boxShadow: '0 6px 20px rgba(99, 102, 241, 0.3)',
+                  boxShadow: '0 6px 20px rgba(15, 23, 42, 0.3)',
                   transition: 'all 0.15s ease'
                 }}
                 onMouseEnter={e => {
@@ -595,7 +619,7 @@ export default function Home() {
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                Mark Attendance Now <ArrowRight size={16} />
+                <ShieldCheck size={16} color="#10B981" /> Access Admin Portal <ArrowRight size={16} />
               </button>
             </div>
           </div>
@@ -632,7 +656,7 @@ export default function Home() {
               </div>
             </div>
             <button
-              onClick={() => navigate('/booking')}
+              onClick={() => handleFacultyAccessClick('/faculty-access')}
               className="calendar-header-btn"
               style={{
                 padding: '10px 18px',
@@ -653,7 +677,7 @@ export default function Home() {
             </button>
           </div>
 
-          <InteractiveCalendar onSelectDate={(date) => navigate(`/booking?date=${date}`)} />
+          <InteractiveCalendar onSelectDate={(date) => handleFacultyAccessClick(`/faculty-access?date=${date}`)} />
         </div>
       </section>
 
@@ -863,6 +887,26 @@ export default function Home() {
           }
         }
       `}</style>
+
+      {/* Faculty Access Passcode Verification Modal */}
+      <FacultyPassModal
+        isOpen={facultyModalOpen}
+        onClose={() => setFacultyModalOpen(false)}
+        onSuccess={() => {
+          setFacultyModalOpen(false);
+          navigate(pendingNavPath || '/faculty-access');
+        }}
+      />
+
+      {/* Admin Access Passcode Verification Modal */}
+      <AdminPassModal
+        isOpen={adminModalOpen}
+        onClose={() => setAdminModalOpen(false)}
+        onSuccess={() => {
+          setAdminModalOpen(false);
+          navigate('/admin-access');
+        }}
+      />
     </div>
   );
 }

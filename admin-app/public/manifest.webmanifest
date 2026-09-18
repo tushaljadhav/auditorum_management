@@ -1,0 +1,42 @@
+{
+  "name": "Kirti Admin | Auditorium Control",
+  "short_name": "Kirti Admin",
+  "description": "College Auditorium Master Admin Panel & Operations App for Kirti M. Doongursee College",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F8FAFC",
+  "theme_color": "#4F46E5",
+  "categories": ["education", "productivity", "management"],
+  "icons": [
+    {
+      "src": "/Logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Overview",
+      "url": "/?tab=dashboard",
+      "description": "Real-time auditorium metrics & live sessions"
+    },
+    {
+      "name": "Halls & Locks",
+      "url": "/?tab=venues",
+      "description": "Manage halls and maintenance locks"
+    },
+    {
+      "name": "Bookings",
+      "url": "/?tab=bookings",
+      "description": "Approve, override, and review bookings"
+    }
+  ]
+}

@@ -95,6 +95,9 @@ CREATE TABLE IF NOT EXISTS bookings (
     email VARCHAR(150),
     phone VARCHAR(50),
     classYear VARCHAR(100),
+    sessionLatitude DECIMAL(10, 8),
+    sessionLongitude DECIMAL(11, 8),
+    sessionPin VARCHAR(10),
     FOREIGN KEY (venueId) REFERENCES venues(id) ON DELETE SET NULL
 );
 

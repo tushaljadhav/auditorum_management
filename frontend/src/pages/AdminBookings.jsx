@@ -511,6 +511,20 @@ export default function AdminBookings() {
                       <td style={{ padding: '14px 18px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                           <button
+                            onClick={() => window.open(`/attendance?bookingId=${b.id}`, '_blank')}
+                            style={{
+                              padding: '6px 10px', borderRadius: 8, background: '#ECFDF5', border: '1px solid #A7F3D0',
+                              color: '#059669', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer',
+                              display: 'inline-flex', alignItems: 'center', gap: 4, transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#D1FAE5'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#ECFDF5'}
+                            title="Open Universal Attendance Gateway for this event"
+                          >
+                            <MapPin size={13} /> Attendance
+                          </button>
+
+                          <button
                             onClick={() => { setSelectedBookingDetail(b); setDetailModalOpen(true); }}
                             style={{
                               padding: '6px 10px', borderRadius: 8, background: '#EFF6FF', border: '1px solid #BFDBFE',
@@ -713,13 +727,27 @@ export default function AdminBookings() {
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '16px 24px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button onClick={() => setDetailModalOpen(false)} style={{ padding: '8px 18px', borderRadius: 10, background: '#FFFFFF', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 650, color: '#475569', cursor: 'pointer' }}>
-                Close
+            <div style={{ padding: '16px 24px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => window.open(`/attendance?bookingId=${selectedBookingDetail.id}`, '_blank')}
+                style={{
+                  padding: '8px 16px', borderRadius: 10, background: '#ECFDF5', border: '1.5px solid #10B981',
+                  fontSize: '0.85rem', fontWeight: 800, color: '#059669', cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 6
+                }}
+              >
+                <MapPin size={14} /> Open Attendance Gateway
               </button>
-              <button onClick={() => handleDelete(selectedBookingDetail.id, selectedBookingDetail.eventName)} style={{ padding: '8px 18px', borderRadius: 10, background: '#EF4444', border: 'none', fontSize: '0.85rem', fontWeight: 700, color: '#FFFFFF', cursor: 'pointer' }}>
-                Delete Record
-              </button>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setDetailModalOpen(false)} style={{ padding: '8px 18px', borderRadius: 10, background: '#FFFFFF', border: '1px solid #CBD5E1', fontSize: '0.85rem', fontWeight: 650, color: '#475569', cursor: 'pointer' }}>
+                  Close
+                </button>
+                <button onClick={() => handleDelete(selectedBookingDetail.id, selectedBookingDetail.eventName)} style={{ padding: '8px 18px', borderRadius: 10, background: '#EF4444', border: 'none', fontSize: '0.85rem', fontWeight: 700, color: '#FFFFFF', cursor: 'pointer' }}>
+                  Delete Record
+                </button>
+              </div>
             </div>
 
           </div>

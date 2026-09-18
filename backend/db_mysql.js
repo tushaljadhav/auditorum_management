@@ -1,4 +1,7 @@
 const mysql = require('mysql2/promise');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 // Create the connection pool to the MySQL database.
 // Using a pool is a best practice because it manages multiple active connections
@@ -8,6 +11,7 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '12345678',
   database: process.env.DB_NAME || 'auditorium_db',
+  port: parseInt(process.env.DB_PORT, 10) || 3306,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -47,6 +51,17 @@ const pool = mysql.createPool({
   // If classYear column doesn't exist at all (fresh DB without className either), add it
   try {
     await pool.query('ALTER TABLE bookings ADD COLUMN classYear VARCHAR(100) NULL');
+  } catch (err) {}
+
+  // Add Dynamic Faculty-Anchored GPS and PIN session columns to bookings
+  try {
+    await pool.query('ALTER TABLE bookings ADD COLUMN sessionLatitude DECIMAL(10, 8) NULL');
+  } catch (err) {}
+  try {
+    await pool.query('ALTER TABLE bookings ADD COLUMN sessionLongitude DECIMAL(11, 8) NULL');
+  } catch (err) {}
+  try {
+    await pool.query('ALTER TABLE bookings ADD COLUMN sessionPin VARCHAR(10) NULL');
   } catch (err) {}
 
   try {
@@ -197,15 +212,17 @@ const dbMysql = {
   },
   addFaculty: async (f) => {
     const id = `faculty_${Date.now()}`;
-    await query('INSERT INTO faculty (id, name, email, mobile, departmentId, designationId) VALUES (?, ?, ?, ?, ?, ?)', [
+    const status = f.status || 'Pending';
+    await query('INSERT INTO faculty (id, name, email, mobile, departmentId, designationId, status) VALUES (?, ?, ?, ?, ?, ?, ?)', [
       id,
       f.name,
       f.email,
       f.mobile,
       f.departmentId,
-      f.designationId
+      f.designationId || null,
+      status
     ]);
-    return { id, ...f };
+    return { id, ...f, status };
   },
   updateFaculty: async (id, fields) => {
     await query('UPDATE faculty SET name = ?, email = ?, mobile = ?, departmentId = ?, designationId = ? WHERE id = ?', [
@@ -224,6 +241,33 @@ const dbMysql = {
       WHERE f.id = ?
     `, [id]);
     return rows[0] || null;
+  },
+  updateFacultyStatus: async (id, status) => {
+    await query('UPDATE faculty SET status = ? WHERE id = ?', [status, id]);
+    const rows = await query(`
+      SELECT f.*, d.name as designationName, 
+             CONCAT(IFNULL(d.name, ''), ' ', f.name) as fullName 
+      FROM faculty f
+      LEFT JOIN designations d ON f.designationId = d.id
+      WHERE f.id = ?
+    `, [id]);
+    return rows[0] || null;
+  },
+  findFacultyByMobile: async (rawMobile) => {
+    const digits = String(rawMobile).replace(/[^0-9]/g, '');
+    const clean10 = digits.slice(-10);
+    if (!clean10) return null;
+    const rows = await query(`
+      SELECT f.*, d.name as designationName, 
+             CONCAT(IFNULL(d.name, ''), ' ', f.name) as fullName 
+      FROM faculty f
+      LEFT JOIN designations d ON f.designationId = d.id
+    `);
+    return rows.find(f => {
+      if (!f.mobile) return false;
+      const fDigits = String(f.mobile).replace(/[^0-9]/g, '').slice(-10);
+      return fDigits === clean10;
+    }) || null;
   },
   deleteFaculty: async (id) => {
     const result = await query('DELETE FROM faculty WHERE id = ?', [id]);
@@ -405,7 +449,7 @@ const dbMysql = {
   },
 
   // Attendance-linked Booking helpers
-  startAttendance: async (bookingId, windowMins) => {
+  startAttendance: async (bookingId, windowMins, latitude = null, longitude = null, pin = null) => {
     const start = new Date();
     const end = new Date(start.getTime() + windowMins * 60000);
     const startStr = start.toISOString();
@@ -415,9 +459,19 @@ const dbMysql = {
       UPDATE bookings 
       SET attendanceStatus = 'OPEN', 
           attendanceWindowStart = ?, 
-          attendanceWindowEnd = ? 
+          attendanceWindowEnd = ?,
+          sessionLatitude = ?,
+          sessionLongitude = ?,
+          sessionPin = ?
       WHERE id = ?
-    `, [startStr, endStr, bookingId]);
+    `, [
+      startStr, 
+      endStr, 
+      latitude !== null && latitude !== undefined && latitude !== '' ? Number(latitude) : null,
+      longitude !== null && longitude !== undefined && longitude !== '' ? Number(longitude) : null,
+      pin || null,
+      bookingId
+    ]);
     
     const rows = await query('SELECT * FROM bookings WHERE id = ?', [bookingId]);
     return rows[0] || null;
@@ -525,8 +579,8 @@ const dbMysql = {
       if (backupObj.bookings && Array.isArray(backupObj.bookings)) {
         await query('TRUNCATE TABLE bookings');
         for (const b of backupObj.bookings) {
-          await query('INSERT INTO bookings (id, eventName, departmentName, facultyName, venueId, eventDescription, bookingDate, startTime, endTime, attendees, status, attendanceStatus, attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone, classYear) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [b.id, b.eventName, b.departmentName || b.departmentId || '', b.facultyName || b.facultyId || '', b.venueId, b.eventDescription || '', b.bookingDate, b.startTime, b.endTime, b.attendees, b.status || 'Confirmed', b.attendanceStatus || 'CLOSED', b.attendanceWindowStart || null, b.attendanceWindowEnd || null, b.coordinator || '', b.email || '', b.phone || '', b.classYear || '']);
+          await query('INSERT INTO bookings (id, eventName, departmentName, facultyName, venueId, eventDescription, bookingDate, startTime, endTime, attendees, status, attendanceStatus, attendanceWindowStart, attendanceWindowEnd, coordinator, email, phone, classYear, sessionLatitude, sessionLongitude, sessionPin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [b.id, b.eventName, b.departmentName || b.departmentId || '', b.facultyName || b.facultyId || '', b.venueId, b.eventDescription || '', b.bookingDate, b.startTime, b.endTime, b.attendees, b.status || 'Confirmed', b.attendanceStatus || 'CLOSED', b.attendanceWindowStart || null, b.attendanceWindowEnd || null, b.coordinator || '', b.email || '', b.phone || '', b.classYear || '', b.sessionLatitude || null, b.sessionLongitude || null, b.sessionPin || null]);
         }
       }
       if (backupObj.attendance && Array.isArray(backupObj.attendance)) {

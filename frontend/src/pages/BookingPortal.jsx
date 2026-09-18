@@ -1,2040 +1,1022 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';
-import CustomSelect from '../components/CustomSelect';
+import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { showCustomToast } from '../utils/toast';
-import { exportToExcel } from '../utils/excelExport';
-import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
-import { jsPDF } from 'jspdf';
-import { drawCollegeHeader, downloadOfficialReceiptPDF } from '../utils/pdfHeader';
-import { Calendar, Clock, MapPin, Users, BookOpen, ChevronLeft, ChevronRight, ArrowRight, CheckCircle, Search, HelpCircle, PlusCircle, Download, Home, Building2, User, AlertTriangle, GraduationCap } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  Smartphone, ShieldCheck, ArrowRight, CheckCircle2,
+  Calendar, MapPin, Sparkles, ExternalLink, QrCode,
+  Download, Copy, Check, Lock, KeyRound, Eye, EyeOff,
+  AlertCircle, SmartphoneNfc, Laptop, HelpCircle, LogOut,
+  Wifi, FileText, CheckCircle, Globe
+} from 'lucide-react';
+import { isFacultyAuthorized, setFacultyAuthorized, verifyFacultyPasscode, getActiveFacultyPasscode } from '../utils/facultyAuth';
 
 export default function BookingPortal() {
   const navigate = useNavigate();
 
-  const getDeptBadgeStyle = (deptName) => {
-    if (!deptName) return { backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' };
-    
-    // Hash function to map name to a distinct hue
-    let hash = 0;
-    for (let i = 0; i < deptName.length; i++) {
-      hash = deptName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = Math.abs(hash) % 360;
-    
-    return {
-      backgroundColor: `hsl(${hue}, 85%, 96%)`,
-      color: `hsl(${hue}, 85%, 35%)`,
-      border: `1px solid hsl(${hue}, 80%, 90%)`,
-      fontWeight: '700',
-      padding: '4px 10px',
-      borderRadius: '6px',
-      fontSize: '0.72rem',
-      display: 'inline-block',
-      letterSpacing: '0.5px'
-    };
-  };
-  
-  // Time formatting and modern Toast alert helpers
-  const formatTime12h = (timeStr) => {
-    if (!timeStr) return '';
-    const [hStr, mStr] = timeStr.split(':');
-    let h = parseInt(hStr, 10);
-    const m = mStr || '00';
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12;
-    if (h === 0) h = 12;
-    return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
-  };
+  // Security authorization state
+  const [authorized, setAuthorized] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-  const showTimeSetToast = (startTime, endTime) => {
-    const formattedStart = formatTime12h(startTime);
-    const formattedEnd = formatTime12h(endTime);
-    showCustomToast('Time Slot Auto-Filled', `${formattedStart} – ${formattedEnd}`, 'success');
-  };
+  // Passcode form state if not authorized
+  const [passcode, setPasscode] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState('');
+  const [shake, setShake] = useState(false);
 
-  // Step tracker: 1 = Check Availability, 2 = Fill Booking Form, 3 = Confirmation / QR
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-
-  // Status tracking & slot pagination states
-  const [activeSubTab, setActiveSubTab] = useState('check'); // 'check' or 'track'
-  const [trackId, setTrackId] = useState('');
-  const [trackedBooking, setTrackedBooking] = useState(null);
-  const [trackedResults, setTrackedResults] = useState([]);
-  const [selectedTrackedBooking, setSelectedTrackedBooking] = useState(null);
-  const [trackingLoading, setTrackingLoading] = useState(false);
-  const [slotCurrentPage, setSlotCurrentPage] = useState(1);
-
-  // Database lists
-
-  const [venues, setVenues] = useState([]);
-
-  // Form states
-  const [availForm, setAvailForm] = useState({
-    venueId: '',
-    bookingDate: '',
-    startTime: '',
-    endTime: ''
+  // Network & IP state for PWA access
+  const [networkInfo, setNetworkInfo] = useState({
+    lanIp: '192.168.1.143',
+    localUrl: 'http://localhost:3001',
+    lanUrl: 'http://192.168.1.143:3001'
   });
+  const [targetMode, setTargetMode] = useState('lan'); // 'lan' (mobile WiFi) or 'local' (this PC)
 
-  const [bookingForm, setBookingForm] = useState({
-    eventName: '',
-    departmentName: '',
-    facultyName: '',
-    classYear: '',
-    eventDescription: '',
-    attendees: ''
-  });
+  // PWA Install prompt capture
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [activeTab, setActiveTab] = useState('android');
 
-  // Submitted booking result for thank-you screen
-  const [bookingResult, setBookingResult] = useState(null);
+  // Active PWA Web App URL
+  const activeAppUrl = targetMode === 'lan' ? networkInfo.lanUrl : networkInfo.localUrl;
 
-  // Day schedule states
-  const [dayBookings, setDayBookings] = useState([]);
-  const [availableSlots, setAvailableSlots] = useState([]);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
-  const [hasCheckedSchedule, setHasCheckedSchedule] = useState(false);
-  const [showAllTimes, setShowAllTimes] = useState(false);
-  const [alternatives, setAlternatives] = useState([]);
-  const [attendanceList, setAttendanceList] = useState([]);
-  const [attendanceWindowMins, setAttendanceWindowMins] = useState(15);
-  const [timeLeftStr, setTimeLeftStr] = useState('');
-
-  // Load lists on mount
   useEffect(() => {
-    fetch('/api/venues')
+    // Check if session is authorized
+    if (isFacultyAuthorized()) {
+      setAuthorized(true);
+    }
+    setCheckingAuth(false);
+
+    // Fetch dynamic live LAN IP from backend
+    fetch('/api/system/network-info')
       .then(res => res.json())
-      .then(data => setVenues(data))
-      .catch(err => console.error("Error loading venues:", err));
-  }, []);
-
-
-
-  const fetchAttendanceList = async (bookingId) => {
-    try {
-      const res = await fetch(`/api/bookings/${bookingId}/attendance`);
-      if (res.ok) {
-        const data = await res.json();
-        setAttendanceList(data);
-      }
-    } catch (err) {
-      console.error("Failed to load attendance list:", err);
-    }
-  };
-
-  const startAttendanceSession = async (bookingId, windowMins) => {
-    try {
-      const res = await fetch(`/api/bookings/${bookingId}/start-attendance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ windowMins })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTrackedBooking(data);
-        fetchAttendanceList(bookingId);
-        Swal.fire({
-          icon: 'success',
-          title: 'Attendance Started!',
-          text: `Attendance is now OPEN for ${windowMins} minutes.`,
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } else {
-        const err = await res.json();
-        Swal.fire({ icon: 'error', title: 'Failed', text: err.error || 'Failed to start attendance.' });
-      }
-    } catch (err) {
-      Swal.fire({ icon: 'error', title: 'Error', text: 'Server communication error.' });
-    }
-  };
-
-  const stopAttendanceSession = async (bookingId) => {
-    try {
-      const res = await fetch(`/api/bookings/${bookingId}/stop-attendance`, {
-        method: 'POST'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTrackedBooking(data);
-        Swal.fire({
-          icon: 'info',
-          title: 'Attendance Closed',
-          text: 'Attendance session has been closed manually.',
-          timer: 1500,
-          showConfirmButton: false
-        });
-      }
-    } catch (err) {
-      console.error("Failed to stop attendance session:", err);
-    }
-  };
-
-  const downloadAttendanceCSV = (list, eventName) => {
-    if (!list || list.length === 0) {
-      Swal.fire({ icon: 'warning', title: 'No Data', text: 'No student has marked attendance yet.' });
-      return;
-    }
-
-    const headers = ["Roll Number", "Student Name", "Class/Stream", "Latitude", "Longitude", "Distance from Venue (m)", "Check-in Time"];
-    const rows = list.map(a => [
-      a.rollNumber || '—',
-      a.studentName || '—',
-      a.classStream || '—',
-      a.latitude || '',
-      a.longitude || '',
-      `${a.distanceFromVenue || 0}m`,
-      new Date(a.checkInTime).toLocaleString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })
-    ]);
-
-    const filename = `Attendance_${(eventName || 'Event').replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xls`;
-    exportToExcel(filename, 'Attendance Roster', headers, rows);
-    showCustomToast('Excel File Exported!', 'Formatted spreadsheet with header row downloaded', 'success');
-  };
-
-  // Poll attendance list when session is OPEN
-  useEffect(() => {
-    let interval = null;
-    if (trackedBooking && (trackedBooking.status === 'Approved' || trackedBooking.status === 'Confirmed') && trackedBooking.attendanceStatus === 'OPEN') {
-      fetchAttendanceList(trackedBooking.id);
-      interval = setInterval(() => {
-        fetchAttendanceList(trackedBooking.id);
-      }, 5000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [trackedBooking]);
-
-  // Countdown timer for open session
-  useEffect(() => {
-    let timer = null;
-    const updateCountdown = () => {
-      if (!trackedBooking || !trackedBooking.attendanceWindowEnd || trackedBooking.attendanceStatus !== 'OPEN') {
-        setTimeLeftStr('');
-        return;
-      }
-      const now = new Date();
-      const end = new Date(trackedBooking.attendanceWindowEnd);
-      const diff = end - now;
-      if (diff <= 0) {
-        setTimeLeftStr('Expired');
-        
-        // Auto-download report for faculty/coordinator when session timer hits zero
-        if (attendanceList && attendanceList.length > 0) {
-          downloadAttendanceCSV(attendanceList, trackedBooking.eventName);
-          Swal.fire({
-            icon: 'info',
-            title: 'Attendance Session Ended',
-            text: 'The session has closed. Your report has been downloaded automatically.',
-            confirmButtonColor: '#4f46e5'
-          });
+      .then(data => {
+        if (data && data.lanUrl) {
+          setNetworkInfo(data);
         }
-
-        setTrackedBooking(prev => prev ? { ...prev, attendanceStatus: 'CLOSED' } : null);
-      } else {
-        const mins = Math.floor(diff / 60000);
-        const secs = Math.floor((diff % 60000) / 1000);
-        setTimeLeftStr(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
-      }
-    };
-
-    if (trackedBooking && trackedBooking.attendanceStatus === 'OPEN') {
-      updateCountdown();
-      timer = setInterval(updateCountdown, 1000);
-    } else {
-      setTimeLeftStr('');
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [trackedBooking, attendanceList]);
-
-  const fetchBookingDetails = async (query) => {
-    if (!query || !query.trim()) return;
-    setTrackingLoading(true);
-    setTrackedResults([]);
-    setSelectedTrackedBooking(null);
-    try {
-      const [bRes, vRes] = await Promise.all([
-        fetch('/api/bookings'),
-        fetch('/api/venues')
-      ]);
-
-      if (bRes.ok) {
-        const bookingsList = await bRes.json();
-        const vList = vRes.ok ? await vRes.json() : [];
-
-        const enrichedList = bookingsList.map(b => {
-          const venue = vList.find(v => v.id === b.venueId);
-          return {
-            ...b,
-            venueName: venue?.name || b.venueName || 'Unknown Venue',
-            deptName: b.departmentName || b.deptName || 'Unknown Department',
-            facultyName: b.facultyName || 'Unknown Faculty',
-            facultyEmail: b.email || '',
-            facultyMobile: b.phone || ''
-          };
-        });
-
-        const q = query.trim().toLowerCase();
-        
-        // Strong & strict matching: match strictly by Faculty Name, Event Title, or Booking ID
-        const matches = enrichedList.filter(b => {
-          if (!q) return true;
-          const idMatch = b.id && b.id.toLowerCase().includes(q);
-          const facultyMatch = b.facultyName && b.facultyName.toLowerCase().includes(q);
-          const eventMatch = b.eventName && b.eventName.toLowerCase().includes(q);
-
-          return idMatch || facultyMatch || eventMatch;
-        });
-
-        // Filter: Keep only bookings from the last 1 month onwards
-        const now = new Date();
-        const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-        const year = oneMonthAgo.getFullYear();
-        const month = String(oneMonthAgo.getMonth() + 1).padStart(2, '0');
-        const day = String(oneMonthAgo.getDate()).padStart(2, '0');
-        const oneMonthAgoStr = `${year}-${month}-${day}`;
-
-        const recentMatches = matches.filter(b => b.bookingDate >= oneMonthAgoStr);
-
-        // Sort results: Current & Upcoming bookings on TOP, Past bookings BELOW
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        const sortedMatches = [...recentMatches].sort((a, b) => {
-          const isAUpcoming = a.bookingDate >= todayStr;
-          const isBUpcoming = b.bookingDate >= todayStr;
-
-          if (isAUpcoming && !isBUpcoming) return -1;
-          if (!isAUpcoming && isBUpcoming) return 1;
-
-          if (isAUpcoming && isBUpcoming) {
-            return a.bookingDate.localeCompare(b.bookingDate);
-          }
-
-          return b.bookingDate.localeCompare(a.bookingDate);
-        });
-
-        if (sortedMatches.length === 0) {
-          Swal.fire({
-            icon: 'info',
-            title: 'No Recent Bookings',
-            text: `No reservation records from the last 1 month match "${query}".`,
-            confirmButtonColor: '#4f46e5',
-            borderRadius: '16px'
-          });
-        } else if (sortedMatches.length === 1) {
-          setTrackedResults(sortedMatches);
-          setSelectedTrackedBooking(sortedMatches[0]);
-        } else {
-          setTrackedResults(sortedMatches);
-          setSelectedTrackedBooking(null);
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching bookings:", err);
-      Swal.fire({
-        icon: 'error',
-        title: 'Error',
-        text: 'Failed to communicate with server. Please try again.',
-        confirmButtonColor: '#4f46e5',
-        borderRadius: '16px'
-      });
-    } finally {
-      setTrackingLoading(false);
-    }
-  };
-
-  // Track specific booking status by ID, Name, or Event
-  const handleTrackBooking = async (e) => {
-    if (e) e.preventDefault();
-    if (!trackId.trim()) return;
-    fetchBookingDetails(trackId);
-  };
-
-  // Check URL search params for tracking link, pre-selected date, and venue
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const trackParam = params.get('track');
-    const dateParam = params.get('date');
-
-    if (trackParam) {
-      setTrackId(trackParam);
-      setActiveSubTab('track');
-      fetchBookingDetails(trackParam);
-    }
-
-    if (dateParam) {
-      setAvailForm(prev => ({
-        ...prev,
-        bookingDate: dateParam
-      }));
-    }
-  }, []);
-
-  const calculateFreeSlots = (bookedSlots, dayStart = "08:00", dayEnd = "23:00", selectedDate = availForm.bookingDate) => {
-    const toMins = (t) => {
-      const [h, m] = t.split(':').map(Number);
-      return h * 60 + m;
-    };
-    const toStr = (m) => {
-      const h = Math.floor(m / 60).toString().padStart(2, '0');
-      const min = (m % 60).toString().padStart(2, '0');
-      return `${h}:${min}`;
-    };
-
-    let effectiveDayStartMins = toMins(dayStart);
-    
-    // If selectedDate is today, ensure start time is at least 10 minutes after current local time
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
-    
-    let minAllowedMins = 0;
-    if (selectedDate === todayStr) {
-      const currentMins = now.getHours() * 60 + now.getMinutes();
-      minAllowedMins = currentMins + 10; // Require 10 minutes advance window
-      
-      // Round up to nearest 5 minutes for clean time slots
-      const rem = minAllowedMins % 5;
-      if (rem !== 0) minAllowedMins += (5 - rem);
-
-      if (minAllowedMins > effectiveDayStartMins) {
-        effectiveDayStartMins = minAllowedMins;
-      }
-    }
-
-    let slots = [{ start: effectiveDayStartMins, end: toMins(dayEnd) }];
-
-    const sortedBooked = [...bookedSlots]
-      .map(b => ({ start: toMins(b.startTime), end: toMins(b.endTime) }))
-      .sort((a, b) => a.start - b.start);
-
-    for (const busy of sortedBooked) {
-      let nextSlots = [];
-      for (const free of slots) {
-        if (busy.start >= free.end || busy.end <= free.start) {
-          nextSlots.push(free);
-        } else {
-          if (busy.start > free.start) {
-            nextSlots.push({ start: free.start, end: busy.start });
-          }
-          if (busy.end < free.end) {
-            nextSlots.push({ start: busy.end, end: free.end });
-          }
-        }
-      }
-      slots = nextSlots;
-    }
-
-    // Split continuous free time slots into standard segments
-    let segmentedSlots = [];
-    for (const free of slots) {
-      if (free.end <= free.start) continue;
-
-      let current = free.start;
-      while (current < free.end) {
-        let end = Math.min(current + 60, free.end);
-        
-        if (free.end - end > 0 && free.end - end < 30) {
-          end = free.end;
-        }
-        
-        if (end - current >= 30) {
-          segmentedSlots.push({ start: current, end: end });
-        }
-        current = end;
-      }
-    }
-
-    return segmentedSlots
-      .filter(s => {
-        if (selectedDate === todayStr) {
-          return s.start >= minAllowedMins;
-        }
-        return true;
       })
-      .map(s => ({
-        start: toStr(s.start),
-        end: toStr(s.end),
-        label: `${formatTime12h(toStr(s.start))} - ${formatTime12h(toStr(s.end))}`
-      }));
-  };
-
-  const fetchDaySchedule = async (venueId, date) => {
-    if (!venueId || !date) return;
-    setScheduleLoading(true);
-    setHasCheckedSchedule(true);
-    setAlternatives([]); // Clear previous alternatives
-    try {
-      const res = await fetch(`/api/venues/${venueId}/bookings?date=${date}`);
-      if (res.ok) {
-        const bookingsData = await res.json();
-        setDayBookings(bookingsData);
-        const freeSlots = calculateFreeSlots(bookingsData, "08:00", "23:00", date);
-        setAvailableSlots(freeSlots);
-        setSlotCurrentPage(1);
-      }
-    } catch (err) {
-      console.error("Error fetching day schedule:", err);
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (availForm.venueId && availForm.bookingDate) {
-      fetchDaySchedule(availForm.venueId, availForm.bookingDate);
-    } else {
-      setDayBookings([]);
-      setAvailableSlots([]);
-      setHasCheckedSchedule(false);
-      setAlternatives([]); // Clear alternatives when resetting
-    }
-  }, [availForm.venueId, availForm.bookingDate]);
-
-  // Step 1: Check slot availability
-  const handleCheckAvailability = async (e) => {
-    e.preventDefault();
-    
-    if (!availForm.venueId || !availForm.bookingDate || !availForm.startTime || !availForm.endTime) {
-      Swal.fire({ icon: 'warning', title: 'Required Fields', text: 'Please fill in all availability details.' });
-      return;
-    }
-
-    if (availForm.endTime <= availForm.startTime) {
-      Swal.fire({ icon: 'error', title: 'Invalid Time Range', text: 'End time must be after the start time.' });
-      return;
-    }
-
-    // Past Date & 10-Minute Advance Time Validation
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
-    
-    const minAllowedMins = now.getHours() * 60 + now.getMinutes() + 10;
-    const minAllowedHours = String(Math.floor(minAllowedMins / 60)).padStart(2, '0');
-    const minAllowedMinutes = String(minAllowedMins % 60).padStart(2, '0');
-    const minAllowedTimeStr = `${minAllowedHours}:${minAllowedMinutes}`;
-
-    if (availForm.bookingDate < todayStr) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Past Date Selected',
-        text: 'You cannot book a venue for a past date. Please choose today or a future date.'
+      .catch(() => {
+        const host = window.location.hostname || 'localhost';
+        if (host !== 'localhost' && host !== '127.0.0.1') {
+          setNetworkInfo(prev => ({
+            ...prev,
+            lanIp: host,
+            lanUrl: `http://${host}:3001`
+          }));
+        }
       });
-      return;
-    }
 
-    const startMins = Number(availForm.startTime.split(':')[0]) * 60 + Number(availForm.startTime.split(':')[1]);
-
-    if (availForm.bookingDate === todayStr && startMins < minAllowedMins) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Advance Booking Required',
-        text: `Bookings for today must be scheduled at least 10 minutes in advance. The earliest allowed start time for today is ${minAllowedTimeStr}.`
-      });
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/bookings/check-availability', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(availForm)
-      });
-      const data = await response.json();
-      setLoading(false);
-
-      if (data.isAvailable) {
-        setAlternatives([]);
-        Swal.fire({
-          title: 'Slot Available!',
-          text: 'The selected venue and time slot is available for booking. Would you like to proceed?',
-          icon: 'success',
-          showCancelButton: true,
-          confirmButtonText: 'Yes, Proceed',
-          cancelButtonText: 'No',
-          confirmButtonColor: '#4f46e5',
-          cancelButtonColor: '#aaa'
-        }).then((result) => {
-          if (result.isConfirmed) {
-            setStep(2);
-          }
-        });
-      } else {
-        setAlternatives(data.alternatives || []);
-        const slotsHtml = availableSlots.length === 0 
-          ? '<div class="text-danger font-weight-bold">No available slots on this day (08:00 AM - 08:00 PM).</div>'
-          : `
-            <div class="text-start mt-2">
-              <p class="mb-2 text-muted" style="font-size: 0.9rem;">Here are the remaining free slots for this day:</p>
-              <div class="d-flex flex-wrap gap-2">
-                ${availableSlots.map(s => `
-                  <span class="badge px-2.5 py-1.5 rounded-pill font-weight-medium border" style="background-color: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; font-size: 0.8rem; display: inline-block; margin: 2px;">
-                    ${s.label}
-                  </span>
-                `).join('')}
-              </div>
-            </div>
-          `;
-
-        Swal.fire({
-          title: 'Slot Unavailable',
-          html: `
-            <div class="text-start mb-3">The selected time slot is already booked for this venue. Please choose another slot or date.</div>
-            ${data.alternatives && data.alternatives.length > 0 ? `
-              <div class="text-start mb-3">
-                <p class="mb-2 font-weight-bold text-dark" style="font-size: 0.88rem;">💡 Recommended Alternatives (Click to auto-select):</p>
-                <div class="d-flex flex-column gap-2">
-                  ${data.alternatives.map((alt, idx) => `
-                    <button type="button" class="btn btn-outline-primary text-start px-3 py-2 w-100 alt-btn" data-idx="${idx}" style="font-size: 0.85rem; border-color: #c7d2fe; color: #4f46e5; background-color: #f5f7ff; border: 1.5px solid;">
-                      ${alt.type === 'alt-venue' || alt.type === 'venue' ? '🏢' : '🕒'} ${alt.label}
-                    </button>
-                  `).join('')}
-                </div>
-              </div>
-            ` : ''}
-            ${slotsHtml}
-          `,
-          icon: 'info',
-          confirmButtonColor: '#4f46e5',
-          didOpen: (modal) => {
-            const buttons = modal.querySelectorAll('.alt-btn');
-            buttons.forEach(btn => {
-              btn.addEventListener('click', (e) => {
-                const idx = parseInt(btn.getAttribute('data-idx'));
-                const selectedAlt = data.alternatives[idx];
-                
-                // Set the form inputs
-                setAvailForm(prev => ({
-                  ...prev,
-                  venueId: selectedAlt.venueId,
-                  startTime: selectedAlt.startTime,
-                  endTime: selectedAlt.endTime
-                }));
-                
-                Swal.close();
-                Swal.fire({
-                  toast: true,
-                  position: 'top-end',
-                  icon: 'success',
-                  title: 'Alternative slot selected!',
-                  showConfirmButton: false,
-                  timer: 1500
-                });
-              });
-            });
-          }
-        });
-      }
-    } catch (err) {
-      setLoading(false);
-      Swal.fire({ icon: 'error', title: 'Server Error', text: 'Failed to verify slot availability. Please try again.' });
-    }
-  };
-
-  // Step 2: Confirm and Submit Booking
-  const handleSubmitBooking = async (e) => {
-    e.preventDefault();
-
-    const deptVal = (bookingForm.departmentName || '').trim();
-    const facVal = (bookingForm.facultyName || '').trim();
-
-    if (!bookingForm.eventName || !deptVal || !facVal || !bookingForm.attendees) {
-      Swal.fire({ icon: 'warning', title: 'Required Fields', text: 'Please fill in all event details.' });
-      return;
-    }
-
-    const payload = {
-      ...availForm,
-      eventName: bookingForm.eventName,
-      departmentName: deptVal,
-      facultyName: facVal,
-      classYear: bookingForm.classYear || '',
-      eventDescription: bookingForm.eventDescription,
-      coordinator: facVal,
-      attendees: Number(bookingForm.attendees)
+    // Listen for PWA browser install prompt
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
     };
 
-    setLoading(true);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    try {
-      const response = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
-      setLoading(false);
+  const handleUnlock = (e) => {
+    if (e) e.preventDefault();
+    if (!passcode.trim()) {
+      setError('Please enter the access passcode.');
+      triggerShake();
+      return;
+    }
 
-      if (response.ok) {
-        const result = await response.json();
-        setBookingResult(result);
-        setStep(3);
-        Swal.fire({ icon: 'success', title: 'Booking Confirmed!', text: 'Your venue reservation is instantly confirmed and ready!', timer: 2500, showConfirmButton: false });
-      } else {
-        const errData = await response.json();
-        Swal.fire({ icon: 'error', title: 'Booking Conflict', text: errData.error || 'Failed to save booking.' });
+    if (verifyFacultyPasscode(passcode)) {
+      setFacultyAuthorized(true);
+      setAuthorized(true);
+      setError('');
+    } else {
+      setError('Invalid Access Passcode! Please enter the correct code provided by administrator.');
+      triggerShake();
+    }
+  };
+
+  const triggerShake = () => {
+    setShake(true);
+    setTimeout(() => setShake(false), 500);
+  };
+
+  const handleLock = () => {
+    setFacultyAuthorized(false);
+    setAuthorized(false);
+    setPasscode('');
+    navigate('/');
+  };
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstallable(false);
       }
-    } catch (err) {
-      setLoading(false);
-      Swal.fire({ icon: 'error', title: 'Submission Error', text: 'Failed to submit the request. Please try again.' });
+      setDeferredPrompt(null);
+    } else {
+      window.open(activeAppUrl, '_blank');
     }
   };
 
-  const selectedVenue = venues.find(v => v.id === availForm.venueId);
-
-  // QR Code Content - Generates a web tracking link that opens on mobile when scanned
-  const qrString = bookingResult 
-    ? `${window.location.origin}/booking?track=${bookingResult.id}` 
-    : "";
-
-  const downloadPDFReceipt = async (booking = bookingResult) => {
-    if (!booking) return;
-    await downloadOfficialReceiptPDF(booking, [], venues, []);
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(activeAppUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  useEffect(() => {
-    if (step === 3 && bookingResult) {
-      const timer = setTimeout(() => {
-        downloadPDFReceipt(bookingResult);
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [step, bookingResult]);
+  const handleDownloadShortcut = () => {
+    const fileContent = `[InternetShortcut]\nURL=${activeAppUrl}\nIconIndex=0\n`;
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Kirti-Faculty-Auditorium-PWA.url';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  if (checkingAuth) {
+    return null;
+  }
 
   return (
-    <div className="min-vh-100 py-5" style={{ background: '#f3f5f8' }}>
-      {/* Hidden logo image for PDF receipt generation */}
-      <img id="college-logo-img" src="/Logo.png" style={{ display: 'none' }} alt="college-logo" />
-      <div className="container" style={{ paddingBottom: '72px' }}>
-        
-        {/* Navigation Back */}
-        {step < 3 && (
-          <button 
-            className="btn btn-link text-decoration-none text-secondary d-flex align-items-center mb-4 px-0 animate-fade-in"
-            onClick={() => step === 2 ? setStep(1) : navigate('/')}
-          >
-            <ChevronLeft size={20} className="me-1" />
-            Back to {step === 2 ? 'Availability Checker' : 'Home'}
-          </button>
-        )}
+    <div style={{
+      minHeight: '100vh',
+      background: '#F8FAFC',
+      fontFamily: "'DM Sans', sans-serif",
+      color: '#0F172A',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      <Navbar activePage="Faculty Access" />
 
-        <div className="row justify-content-center">
-          <div className="col-12 col-lg-8">
-            <div className="premium-card bg-white shadow-sm border-0 animate-fade-in">
-              
-              {/* Header */}
-              <div className="text-center border-bottom pb-4 mb-4">
-                <img src="/Logo.png" alt="Logo" className="mb-2" style={{ height: '60px' }} />
-                <h2 className="font-weight-bold mb-1">Faculty Booking Portal</h2>
-                <p className="text-muted mb-0">Reserve an auditorium for college programs and guest lectures</p>
-                
-                {/* Modern Tailux 3-Step Progress Timeline Indicator */}
-                <div style={{ maxWidth: '580px', margin: '24px auto 0', padding: '0 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-                    {/* Background connecting line */}
-                    <div style={{ position: 'absolute', top: '20px', left: '16%', right: '16%', height: '3px', background: '#E2E8F0', zIndex: 0 }}>
-                      <div style={{
-                        height: '100%',
-                        width: step === 1 ? '0%' : step === 2 ? '50%' : '100%',
-                        background: 'linear-gradient(to right, #6366F1, #10B981)',
-                        transition: 'width 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-                      }} />
-                    </div>
+      {/* ─── CASE 1: LOCKED (PASSCODE REQUIRED) ─── */}
+      {!authorized ? (
+        <main style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '60px 20px',
+          position: 'relative'
+        }}>
+          {/* Background radial glow */}
+          <div style={{
+            position: 'absolute',
+            width: '600px',
+            height: '600px',
+            background: 'radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, transparent 70%)',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            filter: 'blur(50px)'
+          }} />
 
-                    {[
-                      { num: 1, title: '1. Check Slot', desc: 'Venue & Availability' },
-                      { num: 2, title: '2. Event Details', desc: 'Faculty & Event Info' },
-                      { num: 3, title: '3. Confirmed', desc: 'Instant PDF Receipt' }
-                    ].map((sObj) => {
-                      const isActive = step >= sObj.num;
-                      const isCurrent = step === sObj.num;
-                      return (
-                        <div key={sObj.num} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 1 }}>
-                          <div style={{
-                            width: '42px',
-                            height: '42px',
-                            borderRadius: '50%',
-                            background: isActive ? (sObj.num === 3 ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' : 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)') : '#FFFFFF',
-                            border: isActive ? 'none' : '2px solid #CBD5E1',
-                            color: isActive ? '#FFFFFF' : '#64748B',
-                            fontWeight: 800,
-                            fontSize: '0.95rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: isCurrent ? '0 0 16px rgba(37, 99, 235, 0.35)' : '0 2px 6px rgba(0,0,0,0.04)',
-                            transition: 'all 0.3s ease'
-                          }}>
-                            {step > sObj.num ? '✓' : sObj.num}
-                          </div>
-                          <div style={{ marginTop: '8px', textAlign: 'center' }}>
-                            <span style={{ fontSize: '0.82rem', fontWeight: isActive ? 800 : 600, color: isActive ? '#0F172A' : '#64748B', display: 'block' }}>
-                              {sObj.title}
-                            </span>
-                            <span className="d-none d-sm-block" style={{ fontSize: '0.7rem', color: '#94A3B8', marginTop: '2px' }}>
-                              {sObj.desc}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+          <div style={{
+            maxWidth: '520px',
+            width: '100%',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '28px',
+            padding: '44px 36px',
+            boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.1)',
+            textAlign: 'center',
+            position: 'relative',
+            zIndex: 1,
+            transform: shake ? 'translateX(-8px)' : 'none',
+            transition: shake ? 'transform 0.08s ease' : 'all 0.2s ease'
+          }}>
+            {/* Lock Crest */}
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '26px',
+              background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 24px',
+              boxShadow: '0 12px 28px rgba(79, 70, 229, 0.3)',
+              color: '#FFFFFF'
+            }}>
+              <Lock size={38} />
+            </div>
+
+            {/* Badge */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 16px',
+              borderRadius: '999px',
+              background: '#EEF2FF',
+              border: '1px solid #C7D2FE',
+              color: '#4F46E5',
+              fontSize: '0.82rem',
+              fontWeight: 750,
+              marginBottom: 16
+            }}>
+              <ShieldCheck size={14} /> Restricted Faculty Access
+            </div>
+
+            <h1 style={{
+              fontSize: '1.85rem',
+              fontWeight: 800,
+              color: '#0F172A',
+              letterSpacing: '-0.025em',
+              margin: '0 0 10px',
+              lineHeight: 1.25
+            }}>
+              Enter Faculty Passcode
+            </h1>
+
+            <p style={{
+              fontSize: '0.92rem',
+              lineHeight: 1.55,
+              color: '#64748B',
+              margin: '0 auto 26px',
+              maxWidth: '420px'
+            }}>
+              Auditorium booking and faculty mobile PWA access are reserved for verified college faculty. Enter the security pass provided by administration.
+            </p>
+
+            <form onSubmit={handleUnlock}>
+              <div style={{ marginBottom: '18px', textAlign: 'left' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  color: '#334155',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  marginBottom: '8px'
+                }}>
+                  Security Passcode
+                </label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <div style={{
+                    position: 'absolute',
+                    left: '14px',
+                    color: '#94A3B8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    pointerEvents: 'none'
+                  }}>
+                    <KeyRound size={18} />
                   </div>
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    value={passcode}
+                    onChange={(e) => {
+                      setPasscode(e.target.value);
+                      if (error) setError('');
+                    }}
+                    placeholder="Enter faculty passcode..."
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      padding: '14px 44px 14px 44px',
+                      borderRadius: '14px',
+                      border: error ? '2px solid #EF4444' : '1.5px solid #CBD5E1',
+                      background: '#F8FAFC',
+                      fontSize: '1rem',
+                      fontWeight: 600,
+                      color: '#0F172A',
+                      outline: 'none',
+                      letterSpacing: showPass ? 'normal' : '0.15em',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onFocus={(e) => {
+                      if (!error) e.target.style.borderColor = '#6366F1';
+                      e.target.style.background = '#FFFFFF';
+                    }}
+                    onBlur={(e) => {
+                      if (!error) e.target.style.borderColor = '#CBD5E1';
+                      e.target.style.background = '#F8FAFC';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      background: 'none',
+                      border: 'none',
+                      color: '#94A3B8',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '4px'
+                    }}
+                  >
+                    {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+
+                {error && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 8,
+                    color: '#EF4444',
+                    fontSize: '0.82rem',
+                    fontWeight: 600
+                  }}>
+                    <AlertCircle size={15} />
+                    <span>{error}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Passcode hint / badge for user ease */}
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: '#F1F5F9',
+                border: '1px solid #E2E8F0',
+                marginBottom: '22px',
+                fontSize: '0.78rem',
+                color: '#475569',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <span>Provided Passcode:</span>
+                <code style={{
+                  background: '#E2E8F0',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  fontWeight: 700,
+                  color: '#1E293B',
+                  fontFamily: 'monospace'
+                }}>
+                  {getActiveFacultyPasscode()}
+                </code>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  style={{
+                    flex: 1,
+                    padding: '13px 18px',
+                    borderRadius: '14px',
+                    background: '#FFFFFF',
+                    border: '1px solid #CBD5E1',
+                    color: '#475569',
+                    fontSize: '0.94rem',
+                    fontWeight: 650,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Back to Home
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 2,
+                    padding: '13px 20px',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #4F46E5 0%, #6366F1 100%)',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    fontSize: '0.95rem',
+                    fontWeight: 750,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    boxShadow: '0 8px 20px rgba(79, 70, 229, 0.3)'
+                  }}
+                >
+                  Unlock Access <ArrowRight size={17} />
+                </button>
+              </div>
+            </form>
+          </div>
+        </main>
+      ) : (
+        /* ─── CASE 2: UNLOCKED (FACULTY PWA WEB APP GATEWAY) ─── */
+        <main style={{
+          flex: 1,
+          maxWidth: '1180px',
+          width: '100%',
+          margin: '0 auto',
+          padding: '40px 20px 80px'
+        }}>
+          {/* Top Status Header */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+            marginBottom: 28,
+            padding: '14px 20px',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '16px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#10B981',
+                boxShadow: '0 0 0 4px rgba(16, 185, 129, 0.2)'
+              }} />
+              <span style={{ fontSize: '0.88rem', fontWeight: 750, color: '#0F172A' }}>
+                Faculty Access Verified • URL: <code style={{ color: '#4F46E5', fontWeight: 700 }}>/faculty-access</code>
+              </span>
+            </div>
+
+            <button
+              onClick={handleLock}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: '10px',
+                background: '#FEE2E2',
+                border: '1px solid #FCA5A5',
+                color: '#DC2626',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              <LogOut size={14} /> Lock & Exit Portal
+            </button>
+          </div>
+
+          {/* Hero Banner */}
+          <div style={{
+            background: 'linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%)',
+            borderRadius: '28px',
+            padding: '40px 36px',
+            color: '#FFFFFF',
+            marginBottom: 36,
+            position: 'relative',
+            overflow: 'hidden',
+            boxShadow: '0 20px 40px -10px rgba(30, 27, 75, 0.3)'
+          }}>
+            <div style={{ position: 'relative', zIndex: 1, maxWidth: '720px' }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '5px 14px',
+                borderRadius: '999px',
+                background: 'rgba(255, 255, 255, 0.15)',
+                backdropFilter: 'blur(10px)',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                color: '#C7D2FE',
+                marginBottom: 16
+              }}>
+                <Sparkles size={14} color="#FBBF24" /> 100% Progressive Web App (PWA) • No App Store Needed
+              </div>
+              <h1 style={{
+                fontSize: '2.4rem',
+                fontWeight: 800,
+                margin: '0 0 14px',
+                color: '#FFFFFF',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.18
+              }}>
+                Auditorium Faculty PWA Web App
+              </h1>
+              <p style={{
+                fontSize: '1.05rem',
+                lineHeight: 1.6,
+                color: '#E0E7FF',
+                margin: 0
+              }}>
+                Directly add the official Progressive Web App (PWA) to your Android phone, iPhone, or Desktop PC. No APK download or app store installation required — launches full-screen right from your home screen!
+              </p>
+            </div>
+          </div>
+
+          {/* Target Network / Mobile Switcher Bar */}
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '18px',
+            border: '1px solid #E2E8F0',
+            padding: '16px 22px',
+            marginBottom: 30,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 14,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Wifi size={20} color="#4F46E5" />
+              <div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0F172A' }}>
+                  Target Device Destination:
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                  Scanning QR on your phone? Keep <strong>Wi-Fi Mobile</strong> active so your phone connects directly.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setTargetMode('lan')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: targetMode === 'lan' ? '2px solid #4F46E5' : '1px solid #CBD5E1',
+                  background: targetMode === 'lan' ? '#EEF2FF' : '#FFFFFF',
+                  color: targetMode === 'lan' ? '#4F46E5' : '#64748B',
+                  fontWeight: 800,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                📱 Wi-Fi Mobile ({networkInfo.lanIp}:3001)
+              </button>
+              <button
+                onClick={() => setTargetMode('local')}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: targetMode === 'local' ? '2px solid #4F46E5' : '1px solid #CBD5E1',
+                  background: targetMode === 'local' ? '#EEF2FF' : '#FFFFFF',
+                  color: targetMode === 'local' ? '#4F46E5' : '#64748B',
+                  fontWeight: 800,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                💻 This PC (localhost:3001)
+              </button>
+            </div>
+          </div>
+
+          {/* 3 Main Action Cards */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: 24,
+            marginBottom: 40
+          }}>
+            {/* CARD 1: Install PWA Web App + Desktop Shortcut */}
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '24px',
+              padding: '30px 26px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.04)'
+            }}>
+              <div>
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '18px',
+                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFFFFF',
+                  marginBottom: 20,
+                  boxShadow: '0 8px 18px rgba(16, 185, 129, 0.3)'
+                }}>
+                  <Smartphone size={26} />
+                </div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#10B981', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  Direct PWA Installation
+                </div>
+                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0F172A', margin: '0 0 10px' }}>
+                  Install PWA Web App
+                </h3>
+                <p style={{ fontSize: '0.88rem', color: '#64748B', lineHeight: 1.5, margin: '0 0 20px' }}>
+                  Install the PWA directly to your device home screen. No APK download, zero storage consumption, and works offline.
+                </p>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 24 }}>
+                  {['No APK Needed', 'Standalone Mode', 'Auto-Updates', 'Fast & Secure'].map(b => (
+                    <span key={b} style={{
+                      fontSize: '0.74rem',
+                      fontWeight: 650,
+                      background: '#ECFDF5',
+                      color: '#065F46',
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #A7F3D0'
+                    }}>
+                      ✓ {b}
+                    </span>
+                  ))}
                 </div>
               </div>
 
-              {/* Step 1: Availability Check OR Booking Status Tracking */}
-              {step === 1 && (
-                <div>
-                  {/* Selector Tabs */}
-                  <div className="d-flex justify-content-center border-bottom pb-3 mb-4 gap-2">
-                    <button
-                      type="button"
-                      className="btn px-4 py-2.5 rounded-pill font-weight-bold transition-all"
-                      onClick={() => {
-                        setActiveSubTab('check');
-                        setTrackedBooking(null);
-                      }}
-                      style={{ 
-                        fontSize: '0.9rem',
-                        background: activeSubTab === 'check' ? 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)' : '#FFFFFF',
-                        color: activeSubTab === 'check' ? '#FFFFFF' : '#475569',
-                        border: activeSubTab === 'check' ? 'none' : '1px solid #CBD5E1',
-                        boxShadow: activeSubTab === 'check' ? '0 4px 14px rgba(37, 99, 235, 0.3)' : 'none',
-                        transition: 'all 0.25s ease'
-                      }}
-                    >
-                      <Calendar size={16} className="me-1.5" /> Book Auditorium
-                    </button>
-                    <button
-                      type="button"
-                      className="btn px-4 py-2.5 rounded-pill font-weight-bold transition-all"
-                      onClick={() => setActiveSubTab('track')}
-                      style={{ 
-                        fontSize: '0.9rem',
-                        background: activeSubTab === 'track' ? 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)' : '#FFFFFF',
-                        color: activeSubTab === 'track' ? '#FFFFFF' : '#475569',
-                        border: activeSubTab === 'track' ? 'none' : '1px solid #CBD5E1',
-                        boxShadow: activeSubTab === 'track' ? '0 4px 14px rgba(37, 99, 235, 0.3)' : 'none',
-                        transition: 'all 0.25s ease'
-                      }}
-                    >
-                      <Search size={16} className="me-1.5" /> Track Booking Status
-                    </button>
-                  </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button
+                  onClick={handleInstallClick}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    fontSize: '0.96rem',
+                    fontWeight: 750,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    boxShadow: '0 6px 18px rgba(16, 185, 129, 0.3)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Smartphone size={18} /> {isInstallable ? 'Install PWA to Device' : 'Launch & Install Web App'}
+                </button>
 
-                  {activeSubTab === 'check' && (
-                    <form onSubmit={handleCheckAvailability} className="animate-fade-in">
-                      <div className="row g-3">
-                        <div className="col-12">
-                          <label className="form-label font-weight-bold text-secondary">Select Venue (Hall)</label>
-                          <CustomSelect 
-                            value={availForm.venueId}
-                            onChange={(val) => setAvailForm({ ...availForm, venueId: val })}
-                            options={venues.map(v => ({ value: v.id, label: `${v.name} (Capacity: ${v.capacity} pax)` }))}
-                            placeholder="Choose a Hall..."
-                          />
-                        </div>
+                <button
+                  onClick={handleDownloadShortcut}
+                  style={{
+                    width: '100%',
+                    padding: '11px',
+                    borderRadius: '12px',
+                    background: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
+                    color: '#334155',
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <FileText size={15} /> Download Windows Desktop Shortcut (.url)
+                </button>
+              </div>
+            </div>
 
-                        <div className="col-12 col-md-4">
-                          <label className="form-label font-weight-bold text-secondary">Date</label>
-                          <div className="input-group">
-                            <span className="input-group-text bg-light border-end-0"><Calendar size={18} className="text-muted" /></span>
-                            <input 
-                              type="date" 
-                              className="form-control form-control-lg bg-light border-start-0" 
-                              required
-                              min={new Date().toISOString().split('T')[0]}
-                              value={availForm.bookingDate}
-                              onChange={(e) => setAvailForm({ ...availForm, bookingDate: e.target.value })}
-                            />
-                          </div>
-                        </div>
+            {/* CARD 2: QR Code Mobile Scanner */}
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '24px',
+              padding: '30px 26px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.04)'
+            }}>
+              <div style={{
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                color: '#4F46E5',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: 6
+              }}>
+                Scan with Mobile Camera
+              </div>
+              <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0F172A', margin: '0 0 8px' }}>
+                QR Code PWA Access
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: '#64748B', lineHeight: 1.45, margin: '0 0 16px', maxWidth: '300px' }}>
+                Scan using Google Lens or your phone camera to open and install the PWA directly on your smartphone.
+              </p>
 
-                        <div className="col-6 col-md-4">
-                          <div className="d-flex align-items-center justify-content-between mb-1">
-                            <label className="form-label font-weight-bold text-secondary mb-0">Start Time</label>
-                            {availForm.startTime && (
-                              <span className="badge bg-primary bg-opacity-10 text-primary font-weight-bold" style={{ fontSize: '0.78rem', padding: '3px 8px', borderRadius: '6px' }}>
-                                {formatTime12h(availForm.startTime)}
-                              </span>
-                            )}
-                          </div>
-                          <input 
-                            type="time" 
-                            className="form-control form-control-lg bg-light" 
-                            required
-                            value={availForm.startTime}
-                            onChange={(e) => setAvailForm({ ...availForm, startTime: e.target.value })}
-                            style={{ borderRadius: '10px', fontSize: '0.95rem', fontWeight: 600, borderColor: '#CBD5E1' }}
-                          />
-                        </div>
+              {/* QR Box */}
+              <div style={{
+                background: '#FFFFFF',
+                padding: '16px',
+                borderRadius: '20px',
+                border: '2px dashed #CBD5E1',
+                marginBottom: 16,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+              }}>
+                <QRCodeSVG
+                  value={activeAppUrl}
+                  size={150}
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
 
-                        <div className="col-6 col-md-4">
-                          <div className="d-flex align-items-center justify-content-between mb-1">
-                            <label className="form-label font-weight-bold text-secondary mb-0">End Time</label>
-                            {availForm.endTime && (
-                              <span className="badge bg-primary bg-opacity-10 text-primary font-weight-bold" style={{ fontSize: '0.78rem', padding: '3px 8px', borderRadius: '6px' }}>
-                                {formatTime12h(availForm.endTime)}
-                              </span>
-                            )}
-                          </div>
-                          <input 
-                            type="time" 
-                            className="form-control form-control-lg bg-light" 
-                            required
-                            value={availForm.endTime}
-                            onChange={(e) => setAvailForm({ ...availForm, endTime: e.target.value })}
-                            style={{ borderRadius: '10px', fontSize: '0.95rem', fontWeight: 600, borderColor: '#CBD5E1' }}
-                          />
-                        </div>
-                      </div>
+              <div style={{
+                fontSize: '0.76rem',
+                color: '#64748B',
+                marginBottom: 10,
+                fontWeight: 600,
+                wordBreak: 'break-all'
+              }}>
+                Target: <code>{activeAppUrl}</code>
+              </div>
 
-                      {/* Venue Schedule / Slots Timeline */}
-                      {hasCheckedSchedule && (
-                        <div className="premium-card p-4 mt-4 animate-fade-in border-0 shadow-sm" style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #eef2ff' }}>
-                          <div className="d-flex align-items-center gap-2.5 pb-3 border-bottom mb-3.5">
-                            <div className="d-flex align-items-center justify-content-center bg-primary bg-opacity-10 text-primary rounded-3" style={{ width: '38px', height: '38px' }}>
-                              <Calendar size={20} className="text-primary" />
-                            </div>
-                            <div>
-                              <h6 className="font-weight-bold text-dark mb-0.5" style={{ fontSize: '0.96rem' }}>
-                                Venue Schedule Overview
-                              </h6>
-                              <span className="text-muted" style={{ fontSize: '0.8rem' }}>Occupied and free hours for {availForm.bookingDate}</span>
-                            </div>
-                          </div>
+              <button
+                onClick={handleCopyLink}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '9px 18px',
+                  borderRadius: '12px',
+                  background: copiedLink ? '#ECFDF5' : '#F1F5F9',
+                  border: copiedLink ? '1px solid #10B981' : '1px solid #E2E8F0',
+                  color: copiedLink ? '#059669' : '#475569',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {copiedLink ? <Check size={16} /> : <Copy size={16} />}
+                {copiedLink ? 'PWA Link Copied!' : 'Copy Mobile Link'}
+              </button>
+            </div>
 
-                          {scheduleLoading ? (
-                            <div className="d-flex align-items-center gap-2 text-muted py-2" style={{ fontSize: '0.85rem' }}>
-                              <span className="spinner-border spinner-border-sm text-primary" role="status"></span>
-                              <span>Checking venue schedule...</span>
-                            </div>
-                          ) : (
-                            <div className="d-flex flex-column gap-3">
-                              {/* Booked Slots (Busy) */}
-                              <div>
-                                {dayBookings.length === 0 ? (
-                                  <div className="p-3 rounded-3 d-flex align-items-center gap-2.5" style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d' }}>
-                                    <span style={{ fontSize: '1.25rem' }}>✨</span>
-                                    <div>
-                                      <div className="font-weight-bold" style={{ fontSize: '0.88rem' }}>No Booked Slots (Busy)</div>
-                                      <div className="text-secondary" style={{ fontSize: '0.78rem', color: '#16a34a' }}>No bookings scheduled on this date. You have full availability!</div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="p-3 rounded-3 bg-light border border-opacity-50">
-                                    <span className="text-secondary font-weight-semibold d-block mb-2 text-uppercase" style={{ fontSize: '0.74rem', letterSpacing: '0.5px' }}>Already Booked Slots (Busy):</span>
-                                    <div className="d-flex flex-wrap gap-2">
-                                      {dayBookings.map((b, idx) => (
-                                        <div 
-                                          key={idx} 
-                                          className="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border"
-                                          style={{ 
-                                            fontSize: '0.82rem', 
-                                            fontWeight: '500',
-                                            backgroundColor: '#fef2f2',
-                                            color: '#ef4444',
-                                            borderColor: '#fca5a5'
-                                          }}
-                                        >
-                                          <span className="rounded-circle" style={{ width: '6px', height: '6px', backgroundColor: '#ef4444' }}></span>
-                                          <strong style={{ color: '#b91c1c' }}>{formatTime12h(b.startTime)} - {formatTime12h(b.endTime)}</strong>
-                                          <span style={{ color: '#ef4444' }}>({b.eventName})</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Multi-Slot Visual Day Schedule Timeline Bar */}
-                              <div className="p-3 rounded-3 border bg-white mb-2" style={{ borderColor: '#E2E8F0' }}>
-                                <div style={{ fontSize: '0.75rem', fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <span>🗓️ Interactive Visual Day Timeline (09:00 AM – 11:00 PM)</span>
-                                  <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 500 }}>Click any green slot to auto-fill time</span>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(14, 1fr)', gap: 4, overflowX: 'auto', paddingBottom: 4 }}>
-                                  {Array.from({ length: 14 }, (_, i) => {
-                                    const h = i + 9;
-                                    const startStr = `${h.toString().padStart(2, '0')}:00`;
-                                    const endStr = `${(h + 1).toString().padStart(2, '0')}:00`;
-                                    
-                                    const bookingMatch = dayBookings.find(b => {
-                                      const bStartH = parseInt((b.startTime || '0').split(':')[0]);
-                                      const bEndH = parseInt((b.endTime || '0').split(':')[0]);
-                                      return h >= bStartH && h < bEndH;
-                                    });
-
-                                    const isSelected = (() => {
-                                      if (!availForm.startTime || !availForm.endTime) return false;
-                                      const selStart = parseInt((availForm.startTime || '0').split(':')[0]);
-                                      const selEnd = parseInt((availForm.endTime || '0').split(':')[0]);
-                                      return h >= selStart && h < selEnd;
-                                    })();
-
-                                    let bg = '#F0FDF4', border = '#BBF7D0', color = '#15803D', statusText = 'Free Slot';
-
-                                    if (bookingMatch) {
-                                      bg = '#FEF2F2'; border = '#FCA5A5'; color = '#991B1B'; statusText = `Booked: ${bookingMatch.eventName}`;
-                                    } else if (isSelected) {
-                                      bg = '#2563EB'; border = '#1D4ED8'; color = '#FFFFFF'; statusText = 'Selected Slot';
-                                    }
-
-                                    return (
-                                      <button
-                                        key={h}
-                                        type="button"
-                                        disabled={!!bookingMatch}
-                                        onClick={() => {
-                                          setAvailForm(prev => ({ ...prev, startTime: startStr, endTime: endStr }));
-                                          showTimeSetToast(startStr, endStr);
-                                        }}
-                                        title={`${formatTime12h(startStr)} - ${formatTime12h(endStr)}: ${statusText}`}
-                                        style={{
-                                          padding: '8px 2px', borderRadius: 8, border: `1px solid ${border}`,
-                                          background: bg, color: color, fontSize: '0.72rem', fontWeight: 700,
-                                          cursor: bookingMatch ? 'not-allowed' : 'pointer', textAlign: 'center',
-                                          transition: 'all 0.15s ease', display: 'flex', flexDirection: 'column',
-                                          alignItems: 'center', gap: 2, minWidth: 46
-                                        }}
-                                      >
-                                        <span style={{ fontSize: '0.66rem', opacity: 0.85 }}>{formatTime12h(startStr).replace(':00', '')}</span>
-                                        <span style={{ fontSize: '0.65rem' }}>{bookingMatch ? '🔴' : isSelected ? '🔵' : '🟢'}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                                
-                                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: '0.72rem', color: '#64748B', fontWeight: 600, flexWrap: 'wrap' }}>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E' }}></span> Green = Free Slot</span>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444' }}></span> Red = Booked Event</span>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563EB' }}></span> Blue = Selected Time</span>
-                                </div>
-                              </div>
-
-                              {/* Available Slots (Free) with DataTables Pagination */}
-                              <div className="p-3.5 rounded-3 border" style={{ borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
-                                  <span className="text-secondary font-weight-semibold text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '0.5px', color: '#4F46E5' }}>
-                                    Available Slots for Booking (Click to Auto-Fill Time):
-                                  </span>
-                                  <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700 }}>
-                                    Total Free: {availableSlots.length} Slots
-                                  </span>
-                                </div>
-
-                                {availableSlots.length === 0 ? (
-                                  <div className="d-flex flex-column gap-2 mb-2">
-                                    <div className="text-danger font-weight-semibold" style={{ fontSize: '0.85rem' }}>
-                                      ⚠️ No remaining free slots available for booking today (08:00 AM to 11:00 PM).
-                                    </div>
-                                    <div>
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline-primary fw-bold px-3 py-1.5 rounded-pill"
-                                        onClick={() => {
-                                          const tom = new Date();
-                                          tom.setDate(tom.getDate() + 1);
-                                          const tomStr = tom.toISOString().split('T')[0];
-                                          setAvailForm(prev => ({ ...prev, bookingDate: tomStr }));
-                                          showCustomToast('Switched to Tomorrow\'s Date', tomStr, 'info');
-                                        }}
-                                      >
-                                        📅 View Tomorrow's Available Slots
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <>
-                                    {(() => {
-                                      const slotsPerPage = 8;
-                                      const totalPages = Math.ceil(availableSlots.length / slotsPerPage) || 1;
-                                      const currentPage = Math.min(slotCurrentPage, totalPages);
-                                      const paginatedSlots = availableSlots.slice((currentPage - 1) * slotsPerPage, currentPage * slotsPerPage);
-
-                                      return (
-                                        <>
-                                          <div 
-                                            style={{ 
-                                              display: 'grid', 
-                                              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 180px), 1fr))', 
-                                              gap: '10px' 
-                                            }}
-                                          >
-                                            {paginatedSlots.map((slot, idx) => (
-                                              <button
-                                                key={idx}
-                                                type="button"
-                                                className="btn btn-sm btn-outline-primary px-3 py-2.5 rounded font-weight-bold d-flex align-items-center justify-content-center gap-1.5 transition-all shadow-sm border"
-                                                style={{ 
-                                                  fontSize: '0.84rem', 
-                                                  background: '#FFFFFF', 
-                                                  borderColor: '#C7D2FE', 
-                                                  color: '#4F46E5',
-                                                  borderRadius: '10px',
-                                                  transition: 'all 0.15s ease'
-                                                }}
-                                                onClick={() => {
-                                                  setAvailForm(prev => ({
-                                                    ...prev,
-                                                    startTime: slot.start,
-                                                    endTime: slot.end
-                                                  }));
-                                                  showTimeSetToast(slot.start, slot.end);
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                  e.currentTarget.style.backgroundColor = '#4F46E5';
-                                                  e.currentTarget.style.color = '#FFFFFF';
-                                                  e.currentTarget.style.transform = 'translateY(-1.5px)';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                  e.currentTarget.style.backgroundColor = '#FFFFFF';
-                                                  e.currentTarget.style.color = '#4F46E5';
-                                                  e.currentTarget.style.transform = 'translateY(0px)';
-                                                }}
-                                              >
-                                                ➕ {slot.label}
-                                              </button>
-                                            ))}
-                                          </div>
-
-                                          {/* DataTables Style Pagination Controls (< Previous 1 2 Next >) */}
-                                          {availableSlots.length > slotsPerPage && (
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #E2E8F0', paddingTop: 14, marginTop: 14, flexWrap: 'wrap', gap: 10 }}>
-                                              <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
-                                                Showing {((currentPage - 1) * slotsPerPage) + 1} to {Math.min(currentPage * slotsPerPage, availableSlots.length)} of {availableSlots.length} slots
-                                              </div>
-
-                                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <button
-                                                  type="button"
-                                                  disabled={currentPage === 1}
-                                                  onClick={() => setSlotCurrentPage(p => Math.max(1, p - 1))}
-                                                  style={{
-                                                    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px',
-                                                    borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === 1 ? '#F1F5F9' : '#FFFFFF',
-                                                    color: currentPage === 1 ? '#94A3B8' : '#334155', fontSize: '0.78rem', fontWeight: 700,
-                                                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
-                                                  }}
-                                                >
-                                                  <ChevronLeft size={14} /> Previous
-                                                </button>
-
-                                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
-                                                  <button
-                                                    key={pageNum}
-                                                    type="button"
-                                                    onClick={() => setSlotCurrentPage(pageNum)}
-                                                    style={{
-                                                      minWidth: 32, height: 32, borderRadius: 8,
-                                                      border: currentPage === pageNum ? '1px solid #2563EB' : '1px solid #CBD5E1',
-                                                      background: currentPage === pageNum ? '#2563EB' : '#FFFFFF',
-                                                      color: currentPage === pageNum ? '#FFFFFF' : '#334155',
-                                                      fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer'
-                                                    }}
-                                                  >
-                                                    {pageNum}
-                                                  </button>
-                                                ))}
-
-                                                <button
-                                                  type="button"
-                                                  disabled={currentPage === totalPages}
-                                                  onClick={() => setSlotCurrentPage(p => Math.min(totalPages, p + 1))}
-                                                  style={{
-                                                    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px',
-                                                    borderRadius: 8, border: '1px solid #CBD5E1', background: currentPage === totalPages ? '#F1F5F9' : '#FFFFFF',
-                                                    color: currentPage === totalPages ? '#94A3B8' : '#334155', fontSize: '0.78rem', fontWeight: 700,
-                                                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
-                                                  }}
-                                                >
-                                                  Next <ChevronRight size={14} />
-                                                </button>
-                                              </div>
-                                            </div>
-                                          )}
-                                        </>
-                                      );
-                                    })()}
-                                  </>
-                                )}
-
-                                {/* Auto-Alternative Recommendations shown right here on the page */}
-                                {alternatives && alternatives.length > 0 && (
-                                  <div className="mt-3 pt-3 border-top" style={{ borderColor: '#e8d5ff' }}>
-                                    <span className="text-secondary font-weight-semibold d-block mb-2 text-uppercase" style={{ fontSize: '0.74rem', letterSpacing: '0.5px', color: '#4f46e5' }}>
-                                      💡 Recommended Alternatives (Click to select):
-                                    </span>
-                                    <div className="d-flex flex-column gap-2">
-                                      {alternatives.map((alt, idx) => (
-                                        <button
-                                          key={idx}
-                                          type="button"
-                                          className="btn btn-sm btn-outline-primary text-start px-3 py-2.5 rounded transition-all shadow-sm border"
-                                          style={{ 
-                                            fontSize: '0.82rem', 
-                                            background: '#ffffff', 
-                                            borderColor: '#c7d2fe', 
-                                            color: '#4f46e5',
-                                            borderRadius: '8px',
-                                            transition: 'all 0.2s ease',
-                                            lineHeight: '1.4'
-                                          }}
-                                          onClick={() => {
-                                            if (alt.type === 'alt-venue' || alt.type === 'venue') {
-                                              setAvailForm(prev => ({ ...prev, venueId: alt.venueId }));
-                                            } else {
-                                              setAvailForm(prev => ({ ...prev, startTime: alt.start, endTime: alt.end }));
-                                            }
-                                            Swal.fire({
-                                              toast: true,
-                                              position: 'top-end',
-                                              icon: 'success',
-                                              title: `Selected: ${alt.label}`,
-                                              showConfirmButton: false,
-                                              timer: 1500
-                                            });
-                                          }}
-                                          onMouseEnter={(e) => {
-                                            e.currentTarget.style.backgroundColor = '#4f46e5';
-                                            e.currentTarget.style.color = '#ffffff';
-                                            e.currentTarget.style.transform = 'translateY(-1.5px)';
-                                          }}
-                                          onMouseLeave={(e) => {
-                                            e.currentTarget.style.backgroundColor = '#ffffff';
-                                            e.currentTarget.style.color = '#4f46e5';
-                                            e.currentTarget.style.transform = 'translateY(0px)';
-                                          }}
-                                        >
-                                          {alt.type === 'alt-venue' || alt.type === 'venue' ? '🏢' : '🕒'} {alt.label}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="mt-4">
-                        <button 
-                          type="submit" 
-                          className="btn btn-gradient-primary btn-lg w-100 py-3 text-white font-weight-bold shadow-sm"
-                          disabled={loading}
-                          style={{
-                            background: 'linear-gradient(to right, #818cf8, #4f46e5)',
-                            border: 'none',
-                            borderRadius: '10px',
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'translateY(-1.5px)';
-                            e.currentTarget.style.boxShadow = '0 6px 15px rgba(79, 70, 229, 0.2)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }}
-                        >
-                          {loading ? (
-                            <>
-                              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                              Checking Slot Availability...
-                            </>
-                          ) : 'Check Availability'}
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  {activeSubTab === 'track' && (
-                    <div className="animate-fade-in mt-4 pt-2">
-                      <form onSubmit={handleTrackBooking} className="mb-5">
-                        <label className="form-label font-weight-bold text-dark d-flex align-items-center gap-2 mb-2.5" style={{ fontSize: '0.96rem' }}>
-                          <Search size={18} style={{ color: '#2563EB' }} />
-                          Track & Inspect Reservations
-                        </label>
-                        <div className="d-flex flex-column flex-sm-row gap-3">
-                          <div className="position-relative flex-grow-1">
-                            <input 
-                              type="text" 
-                              className="form-control form-control-lg bg-white border shadow-sm px-4 py-3"
-                              required
-                              placeholder="Type Faculty Name (e.g. Dr. Sharma), Event Title, or Booking ID..."
-                              value={trackId}
-                              onChange={(e) => setTrackId(e.target.value)}
-                              style={{
-                                borderRadius: '14px',
-                                borderColor: '#CBD5E1',
-                                fontSize: '0.92rem',
-                                color: '#0F172A'
-                              }}
-                            />
-                          </div>
-                          <button 
-                            type="submit" 
-                            className="btn btn-primary btn-lg px-4 py-3 text-white font-weight-bold shadow-sm d-flex align-items-center justify-content-center gap-2 flex-shrink-0"
-                            disabled={trackingLoading}
-                            style={{
-                              background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
-                              border: 'none',
-                              borderRadius: '14px',
-                              fontSize: '0.92rem',
-                              transition: 'all 0.2s ease',
-                              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)'
-                            }}
-                          >
-                            {trackingLoading ? (
-                              <>
-                                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                Searching...
-                              </>
-                            ) : (
-                              <>
-                                <Search size={18} />
-                                Track Reservations
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        <div className="d-flex align-items-center gap-1.5 text-secondary mt-2.5" style={{ fontSize: '0.78rem' }}>
-                          <HelpCircle size={13} style={{ color: '#64748B' }} />
-                          <span>Forgot your Booking ID? Simply type your Faculty Name or Event Title to view all your recent bookings.</span>
-                        </div>
-                      </form>
-
-                      {/* Multiple Bookings Selection (Search by Name / Event) */}
-                      {trackedResults.length > 1 && !selectedTrackedBooking && (
-                        <div className="animate-fade-in mb-5">
-                          {/* Search Header Banner */}
-                          <div 
-                            className="p-4 mb-4 rounded-4 bg-white border shadow-sm" 
-                            style={{ borderColor: '#E2E8F0' }}
-                          >
-                            <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 pb-3 border-bottom" style={{ borderColor: '#F1F5F9' }}>
-                              <div className="d-flex align-items-center gap-3">
-                                <div style={{ width: 38, height: 38, borderRadius: 12, background: '#EFF6FF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                  <CheckCircle size={18} style={{ color: '#2563EB' }} />
-                                </div>
-                                <div>
-                                  <h6 className="font-weight-bold text-dark mb-0" style={{ fontSize: '1.05rem', color: '#0F172A' }}>
-                                    Found {trackedResults.length} {trackedResults.length === 1 ? 'Reservation' : 'Reservations'}
-                                  </h6>
-                                  <span className="text-secondary" style={{ fontSize: '0.82rem' }}>
-                                    {trackId.trim() ? `Showing results matching "${trackId}"` : 'Showing all recent auditorium bookings'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="d-flex align-items-center gap-2">
-                                <span className="badge px-3 py-2 rounded-pill font-weight-bold" style={{ background: '#F1F5F9', color: '#334155', border: '1px solid #CBD5E1', fontSize: '0.78rem' }}>
-                                  📅 Last 30 Days Filter
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="pt-3 d-flex align-items-center gap-1.5 text-secondary" style={{ fontSize: '0.82rem' }}>
-                              <HelpCircle size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
-                              <span>Select any reservation record below to inspect full details and download official receipt PDF.</span>
-                            </div>
-                          </div>
-
-                          {/* ─── DESKTOP DATATABLES VIEW (d-none d-md-block) ─── */}
-                          <div className="d-none d-md-block table-responsive border rounded-4 bg-white shadow-sm" style={{ borderColor: '#E2E8F0', overflow: 'hidden' }}>
-                            <table className="table table-hover align-middle mb-0 text-start" style={{ fontSize: '0.88rem' }}>
-                              <thead style={{ background: '#F8FAFC', borderBottom: '2px solid #E2E8F0' }}>
-                                <tr>
-                                  <th style={{ padding: '14px 18px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.6px' }}>
-                                    Event Title & Reference ID
-                                  </th>
-                                  <th style={{ padding: '14px 18px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.6px' }}>
-                                    Venue & Hall
-                                  </th>
-                                  <th style={{ padding: '14px 18px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.6px' }}>
-                                    Date & Time Schedule
-                                  </th>
-                                  <th style={{ padding: '14px 18px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.6px' }}>
-                                    Faculty Coordinator
-                                  </th>
-                                  <th style={{ padding: '14px 18px', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.6px', textAlign: 'right' }}>
-                                    Action
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {trackedResults.map((b) => {
-                                  const todayStr = new Date().toISOString().split('T')[0];
-                                  const isUpcoming = b.bookingDate >= todayStr;
-
-                                  return (
-                                    <tr 
-                                      key={b.id} 
-                                      style={{ 
-                                        cursor: 'pointer', 
-                                        transition: 'all 0.2s ease',
-                                        backgroundColor: isUpcoming ? '#FAFCFF' : '#FFFFFF',
-                                        borderBottom: '1px solid #F1F5F9'
-                                      }}
-                                      onClick={() => setSelectedTrackedBooking(b)}
-                                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F1F5F9'}
-                                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isUpcoming ? '#FAFCFF' : '#FFFFFF'}
-                                    >
-                                      {/* Column 1: Event Title & Booking ID */}
-                                      <td style={{ padding: '16px 18px' }}>
-                                        <div className="font-weight-bold text-dark" style={{ fontSize: '0.95rem', color: '#0F172A' }}>
-                                          {b.eventName}
-                                        </div>
-                                        <div className="mt-1 d-flex align-items-center gap-1.5">
-                                          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.76rem', color: '#4338CA', background: '#EEF2FF', border: '1px solid #C7D2FE', padding: '2px 8px', borderRadius: '6px', display: 'inline-block' }}>
-                                            {b.id}
-                                          </span>
-                                        </div>
-                                      </td>
-
-                                      {/* Column 2: Venue & Hall */}
-                                      <td style={{ padding: '16px 18px' }}>
-                                        <div className="d-flex align-items-center gap-2 font-weight-semibold" style={{ color: '#1E293B', fontSize: '0.88rem' }}>
-                                          <div style={{ width: 28, height: 28, borderRadius: 8, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                            <Building2 size={15} style={{ color: '#2563EB' }} />
-                                          </div>
-                                          <span>{b.venueName}</span>
-                                        </div>
-                                      </td>
-
-                                      {/* Column 3: Date & Schedule */}
-                                      <td style={{ padding: '16px 18px' }}>
-                                        <div className="d-flex align-items-center gap-2 font-weight-bold" style={{ color: '#0F172A', fontSize: '0.88rem' }}>
-                                          <Calendar size={14} style={{ color: '#6366F1', flexShrink: 0 }} />
-                                          <span>{b.bookingDate}</span>
-                                          {isUpcoming ? (
-                                            <span style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                              <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
-                                              Upcoming
-                                            </span>
-                                          ) : (
-                                            <span style={{ backgroundColor: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 600 }}>
-                                              Past
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="d-flex align-items-center gap-1.5 text-secondary" style={{ fontSize: '0.78rem', marginTop: '4px' }}>
-                                          <Clock size={13} style={{ flexShrink: 0 }} />
-                                          <span>{formatTime12h(b.startTime)} - {formatTime12h(b.endTime)}</span>
-                                        </div>
-                                      </td>
-
-                                      {/* Column 4: Faculty Coordinator */}
-                                      <td style={{ padding: '16px 18px' }}>
-                                        <div className="d-flex align-items-center gap-2 flex-wrap">
-                                          <div className="d-flex align-items-center gap-1.5 font-weight-bold" style={{ color: '#0F172A', fontSize: '0.88rem' }}>
-                                            <User size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
-                                            <span>{b.facultyName}</span>
-                                          </div>
-                                          {b.deptName && (
-                                            <span style={getDeptBadgeStyle(b.deptName)}>
-                                              {b.deptName}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </td>
-
-                                      {/* Column 5: Action Button */}
-                                      <td style={{ padding: '16px 18px', textAlign: 'right' }}>
-                                        <button 
-                                          type="button"
-                                          className="btn btn-sm font-weight-bold rounded-pill px-3.5 py-2 text-white shadow-sm d-inline-flex align-items-center gap-1.5"
-                                          style={{ 
-                                            background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)', 
-                                            border: 'none', 
-                                            fontSize: '0.8rem',
-                                            whiteSpace: 'nowrap',
-                                            transition: 'all 0.2s ease'
-                                          }}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedTrackedBooking(b);
-                                          }}
-                                        >
-                                          Inspect Details <ArrowRight size={13} />
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {/* ─── MOBILE CARD VIEW (d-block d-md-none) ─── */}
-                          <div className="d-block d-md-none">
-                            <div className="d-flex flex-column gap-3">
-                              {trackedResults.map((b) => {
-                                const todayStr = new Date().toISOString().split('T')[0];
-                                const isUpcoming = b.bookingDate >= todayStr;
-
-                                return (
-                                  <div 
-                                    key={b.id}
-                                    className="bg-white border rounded-4 p-3.5 shadow-sm"
-                                    style={{ 
-                                      borderColor: isUpcoming ? '#BFDBFE' : '#E2E8F0',
-                                      background: isUpcoming ? 'linear-gradient(180deg, #FAFCFF 0%, #FFFFFF 100%)' : '#FFFFFF',
-                                      cursor: 'pointer'
-                                    }}
-                                    onClick={() => setSelectedTrackedBooking(b)}
-                                  >
-                                    {/* Top Row: Event Name + Upcoming Badge */}
-                                    <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-                                      <div>
-                                        <h6 className="font-weight-bold text-dark mb-1" style={{ fontSize: '1rem', color: '#0F172A', lineHeight: 1.3 }}>
-                                          {b.eventName}
-                                        </h6>
-                                        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.74rem', color: '#4338CA', background: '#EEF2FF', border: '1px solid #C7D2FE', padding: '2px 8px', borderRadius: '6px', display: 'inline-block' }}>
-                                          {b.id}
-                                        </span>
-                                      </div>
-
-                                      {isUpcoming ? (
-                                        <span style={{ backgroundColor: '#ECFDF5', color: '#047857', border: '1px solid #A7F3D0', padding: '3px 10px', borderRadius: '14px', fontSize: '0.72rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                                          <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10B981', display: 'inline-block' }}></span>
-                                          Upcoming
-                                        </span>
-                                      ) : (
-                                        <span style={{ backgroundColor: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', padding: '3px 10px', borderRadius: '14px', fontSize: '0.72rem', fontWeight: 600, flexShrink: 0 }}>
-                                          Past
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    {/* Info Grid */}
-                                    <div className="p-2.5 my-2.5 rounded-3 bg-light border d-flex flex-column gap-2" style={{ fontSize: '0.84rem' }}>
-                                      <div className="d-flex align-items-center gap-2 font-weight-bold" style={{ color: '#1E293B' }}>
-                                        <Building2 size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
-                                        <span>{b.venueName}</span>
-                                      </div>
-                                      <div className="d-flex align-items-center gap-2" style={{ color: '#334155' }}>
-                                        <Calendar size={14} style={{ color: '#6366F1', flexShrink: 0 }} />
-                                        <span className="font-weight-semibold">{b.bookingDate}</span>
-                                        <span className="text-muted">({formatTime12h(b.startTime)} - {formatTime12h(b.endTime)})</span>
-                                      </div>
-                                      <div className="d-flex align-items-center gap-2" style={{ color: '#334155' }}>
-                                        <User size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
-                                        <span className="font-weight-bold">{b.facultyName}</span>
-                                        {b.deptName && (
-                                          <span style={getDeptBadgeStyle(b.deptName)}>
-                                            {b.deptName}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Bottom Action Button */}
-                                    <div className="d-flex justify-content-end align-items-center mt-3 pt-2 border-top" style={{ borderColor: '#F1F5F9' }}>
-                                      <button 
-                                        type="button"
-                                        className="btn btn-sm font-weight-bold rounded-pill px-3 py-1.5 text-white shadow-sm d-inline-flex align-items-center gap-1.5"
-                                        style={{ 
-                                          background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)', 
-                                          border: 'none', 
-                                          fontSize: '0.8rem'
-                                        }}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedTrackedBooking(b);
-                                        }}
-                                      >
-                                        Inspect Details <ArrowRight size={13} />
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Single Selected Tracked Booking Detail Card */}
-                      {selectedTrackedBooking && (
-                        <div className="premium-card bg-light border p-4 animate-fade-in">
-                          {trackedResults.length > 1 && (
-                            <button 
-                              type="button" 
-                              className="btn btn-sm btn-outline-secondary mb-3 font-weight-semibold d-inline-flex align-items-center gap-1"
-                              onClick={() => setSelectedTrackedBooking(null)}
-                            >
-                              <ChevronLeft size={16} /> Back to Search Results ({trackedResults.length})
-                            </button>
-                          )}
-
-                          <div className="d-flex justify-content-between align-items-center border-bottom pb-2.5 mb-3 flex-wrap gap-2">
-                            <h5 className="font-weight-bold text-primary mb-0" style={{ fontSize: '1.2rem' }}>{selectedTrackedBooking.eventName}</h5>
-                            <span className={`badge px-3 py-2 rounded-pill font-weight-bold ${
-                              (selectedTrackedBooking.status === 'Approved' || selectedTrackedBooking.status === 'Confirmed') ? 'bg-success text-white' :
-                              (selectedTrackedBooking.status === 'Cancelled' || selectedTrackedBooking.status === 'cancelled_by_admin') ? 'bg-danger text-white' : 'bg-warning text-dark'
-                            }`} style={{ fontSize: '0.85rem' }}>
-                              {(selectedTrackedBooking.status === 'Approved' || selectedTrackedBooking.status === 'Confirmed') ? 'Confirmed' : selectedTrackedBooking.status}
-                            </span>
-                          </div>
-
-                          <div className="row g-3 text-dark" style={{ fontSize: '0.95rem' }}>
-                            <div className="col-12 col-sm-6">
-                              <strong>Booking Reference ID:</strong> 
-                              <span className="font-monospace text-dark bg-white border px-2 py-1 rounded ms-2" style={{ fontSize: '0.88rem' }}>
-                                {selectedTrackedBooking.id}
-                              </span>
-                            </div>
-                            <div className="col-12 col-sm-6">
-                              <strong>Venue (Hall):</strong> {selectedTrackedBooking.venueName}
-                            </div>
-                            <div className="col-12 col-sm-6">
-                              <strong>Booking Date:</strong> {selectedTrackedBooking.bookingDate}
-                            </div>
-                            <div className="col-12 col-sm-6">
-                              <strong>Time Schedule:</strong> {formatTime12h(selectedTrackedBooking.startTime)} - {formatTime12h(selectedTrackedBooking.endTime)}
-                            </div>
-                            <div className="col-12 col-sm-6">
-                              <strong>Faculty Member:</strong> {selectedTrackedBooking.facultyName}
-                            </div>
-                            <div className="col-12 col-sm-6">
-                              <strong>Department:</strong> {selectedTrackedBooking.deptName}
-                            </div>
-                            {selectedTrackedBooking.attendees && (
-                              <div className="col-12 col-sm-6">
-                                <strong>Expected Attendees:</strong> {selectedTrackedBooking.attendees} People
-                              </div>
-                            )}
-                            <div className="col-12">
-                              <strong>Event Description & Objective:</strong>
-                              <p className="text-muted mt-1.5 p-3 bg-white rounded border" style={{ fontSize: '0.88rem', lineHeight: '1.5' }}>
-                                {selectedTrackedBooking.eventDescription || 'No detailed description specified.'}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Action Buttons for Receipt Download */}
-                          <div className="mt-4 pt-3 border-top d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <button 
-                              type="button" 
-                              className="btn btn-outline-primary font-weight-bold d-flex align-items-center gap-2 px-3 py-2 rounded-3"
-                              onClick={() => {
-                                navigator.clipboard.writeText(selectedTrackedBooking.id);
-                                showCustomToast('Booking ID copied to clipboard!', selectedTrackedBooking.id, 'success');
-                              }}
-                            >
-                              📋 Copy Booking ID
-                            </button>
-
-                            <button 
-                              type="button" 
-                              className="btn btn-primary font-weight-bold d-flex align-items-center gap-2 px-4 py-2 rounded-3 text-white shadow-sm"
-                              style={{ background: 'linear-gradient(to right, #818cf8, #4f46e5)', border: 'none' }}
-                              onClick={() => downloadPDFReceipt(selectedTrackedBooking)}
-                            >
-                              <Download size={16} /> Download Official PDF Receipt
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+            {/* CARD 3: Direct Web App Access */}
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '24px',
+              padding: '30px 26px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.04)'
+            }}>
+              <div>
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '18px',
+                  background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFFFFF',
+                  marginBottom: 20,
+                  boxShadow: '0 8px 18px rgba(2, 132, 199, 0.3)'
+                }}>
+                  <Globe size={26} />
                 </div>
-              )}
-
-              {/* Step 2: Fill Details Form */}
-              {step === 2 && (
-                <form onSubmit={handleSubmitBooking}>
-                  {/* Selected Slot Recap */}
-                  <div className="premium-card p-3 mb-4" style={{ background: '#f8f9fa', border: '1px solid rgba(0,0,0,0.05)' }}>
-                    <h6 className="font-weight-bold text-muted mb-2 text-uppercase" style={{ fontSize: '0.75rem', letterSpacing: '1px' }}>Selected Schedule</h6>
-                    <div className="row g-2 text-dark">
-                      <div className="col-12 col-md-4 d-flex align-items-center">
-                        <MapPin size={16} className="text-primary me-2" />
-                        <span><strong>Venue:</strong> {selectedVenue?.name}</span>
-                      </div>
-                      <div className="col-6 col-md-4 d-flex align-items-center">
-                        <Calendar size={16} className="text-primary me-2" />
-                        <span><strong>Date:</strong> {availForm.bookingDate}</span>
-                      </div>
-                      <div className="col-6 col-md-4 d-flex align-items-center">
-                        <Clock size={16} className="text-primary me-2" />
-                        <span><strong>Time:</strong> {formatTime12h(availForm.startTime)} - {formatTime12h(availForm.endTime)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="row g-3">
-                    <div className="col-12">
-                      <label className="form-label font-weight-bold text-secondary">Event Name</label>
-                      <div className="input-group">
-                        <span className="input-group-text bg-light border-end-0"><BookOpen size={18} className="text-muted" /></span>
-                        <input 
-                          type="text" 
-                          className="form-control form-control-lg bg-light border-start-0" 
-                          required
-                          placeholder="e.g. Guest Lecture on Cyber Security"
-                          value={bookingForm.eventName}
-                          onChange={(e) => setBookingForm({ ...bookingForm, eventName: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label font-weight-bold text-secondary">Department Name</label>
-                      <div className="input-group">
-                        <span className="input-group-text bg-light border-end-0"><Building2 size={18} className="text-muted" /></span>
-                        <input 
-                          type="text" 
-                          className="form-control form-control-lg bg-light border-start-0" 
-                          required
-                          placeholder="e.g. Information Technology"
-                          value={bookingForm.departmentName}
-                          onChange={(e) => setBookingForm({ ...bookingForm, departmentName: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label font-weight-bold text-secondary">Faculty / Coordinator Name</label>
-                      <div className="input-group">
-                        <span className="input-group-text bg-light border-end-0"><User size={18} className="text-muted" /></span>
-                        <input 
-                          type="text" 
-                          className="form-control form-control-lg bg-light border-start-0" 
-                          required
-                          placeholder="e.g. Dr. A. P. Sharma"
-                          value={bookingForm.facultyName}
-                          onChange={(e) => setBookingForm({ ...bookingForm, facultyName: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label font-weight-bold text-secondary">Class / Year</label>
-                      <div className="input-group">
-                        <span className="input-group-text bg-light border-end-0"><GraduationCap size={18} className="text-muted" /></span>
-                        <input 
-                          type="text" 
-                          className="form-control form-control-lg bg-light border-start-0" 
-                          required
-                          placeholder="e.g. FY, SY, TY, 11th, 12th"
-                          value={bookingForm.classYear}
-                          onChange={(e) => setBookingForm({ ...bookingForm, classYear: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="col-12 col-md-6">
-                      <label className="form-label font-weight-bold text-secondary">Number of Attendees</label>
-                      <div className="input-group">
-                        <span className="input-group-text bg-light border-end-0"><Users size={18} className="text-muted" /></span>
-                        <input 
-                          type="number" 
-                          className="form-control form-control-lg bg-light border-start-0" 
-                          required
-                          placeholder="e.g. 150"
-                          value={bookingForm.attendees}
-                          onChange={(e) => setBookingForm({ ...bookingForm, attendees: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Smart Capacity Overbooking Warning Box */}
-                    {(() => {
-                      const currentVenueId = bookingForm.venueId || availForm.venueId;
-                      const selVenue = venues.find(v => v.id === currentVenueId);
-                      const isOver = selVenue && Number(bookingForm.attendees) > Number(selVenue.capacity);
-                      const largerHalls = venues.filter(v => v.id !== currentVenueId && v.status !== 'Maintenance' && Number(v.capacity) >= Number(bookingForm.attendees));
-                      if (!isOver) return null;
-                      return (
-                        <div className="col-12 animate-fade-in" style={{ marginTop: 4 }}>
-                          <div style={{ padding: '14px 16px', borderRadius: 12, background: '#FFFBEB', border: '1px solid #FCD34D', color: '#78350F', fontSize: '0.88rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: '#B45309', marginBottom: 4 }}>
-                              <AlertTriangle size={18} style={{ color: '#D97706', flexShrink: 0 }} />
-                              <span>Capacity Warning: Expected Attendees ({bookingForm.attendees}) exceed Hall Capacity ({selVenue.capacity} seats)</span>
-                            </div>
-                            <div>
-                              Selected <strong>{selVenue.name}</strong> max capacity is {selVenue.capacity} seats.
-                              {largerHalls.length > 0 ? (
-                                <div style={{ marginTop: 6, fontWeight: 600, color: '#92400E' }}>
-                                  💡 Recommended Larger Halls: {largerHalls.map(v => `${v.name} (${v.capacity} seats)`).join(', ')}.
-                                </div>
-                              ) : (
-                                <div style={{ marginTop: 4, fontWeight: 500 }}>
-                                  Please verify seating arrangement or split attendees.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    <div className="col-12">
-                      <label className="form-label font-weight-bold text-secondary">Event Description</label>
-                      <textarea 
-                        className="form-control bg-light" 
-                        rows="3"
-                        required
-                        placeholder="Brief summary of the schedule, target audience, guest details, etc..."
-                        value={bookingForm.eventDescription}
-                        onChange={(e) => setBookingForm({ ...bookingForm, eventDescription: e.target.value })}
-                      />
-                    </div>
-
-
-                  </div>
-
-                  <div className="mt-4 d-flex gap-3">
-                    <button 
-                      type="button" 
-                      className="btn btn-light btn-lg w-50 py-3 text-secondary font-weight-bold transition-all border"
-                      style={{ borderRadius: '10px' }}
-                      onClick={() => setStep(1)}
-                    >
-                      Back
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="btn btn-gradient-primary btn-lg w-50 py-3 text-white font-weight-bold shadow-sm"
-                      disabled={loading}
-                      style={{
-                        background: 'linear-gradient(to right, #818cf8, #4f46e5)',
-                        border: 'none',
-                        borderRadius: '10px',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-1.5px)';
-                        e.currentTarget.style.boxShadow = '0 6px 15px rgba(79, 70, 229, 0.2)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                    >
-                      {loading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                          Submitting...
-                        </>
-                      ) : 'Confirm Booking'}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* Step 3: Confirmation / Thank You */}
-              {step === 3 && bookingResult && (
-                <div className="text-center py-4 animate-fade-in">
-                  {/* Hidden logo image for PDF generation */}
-                  <img id="college-logo-img" src="/Logo.png" style={{ display: 'none' }} alt="college-logo" />
-                  <CheckCircle size={60} className="text-success mb-3" />
-                  <h1 className="font-weight-bold text-success mb-1">Booking Confirmed!</h1>
-                  <p className="text-muted">Your booking has been instantly confirmed and registered.</p>
-
-                  {/* Details block (Centered Datatable Card) */}
-                  <div className="d-flex justify-content-center my-4 mx-2 animate-fade-in">
-                    <div 
-                      className="p-4 border rounded-3 bg-white text-start shadow-sm" 
-                      style={{ 
-                        fontSize: '0.92rem', 
-                        maxWidth: '600px', 
-                        width: '100%',
-                        borderColor: '#e2e8f0',
-                        boxShadow: '0 4px 15px -3px rgba(0,0,0,0.05)'
-                      }}
-                    >
-                      {/* Card Header */}
-                      <div className="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3.5 flex-wrap gap-2">
-                        <div>
-                          <h5 className="font-weight-bold text-dark mb-0" style={{ letterSpacing: '-0.3px', fontSize: '1.15rem' }}>Booking Receipt</h5>
-                        </div>
-                        <span className="badge bg-success text-white px-3 py-2 rounded-pill font-weight-bold shadow-sm" style={{ fontSize: '0.75rem', letterSpacing: '0.5px' }}>
-                          Confirmed
-                        </span>
-                      </div>
-
-                      {/* Datatable Wrapper */}
-                      <div className="table-responsive border rounded-3" style={{ overflow: 'hidden' }}>
-                        <table className="table table-hover align-middle mb-0" style={{ fontSize: '0.9rem' }}>
-                          <tbody>
-                            <tr>
-                              <td className="bg-light font-weight-bold text-secondary border-end" style={{ width: '160px', padding: '12px 16px' }}>Faculty</td>
-                              <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>{bookingResult.facultyName || bookingForm.facultyName}</td>
-                            </tr>
-                            <tr>
-                              <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Event Name</td>
-                              <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>{bookingResult.eventName}</td>
-                            </tr>
-                            <tr>
-                              <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Booking ID</td>
-                              <td style={{ padding: '12px 16px' }}>
-                                <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#1e293b', background: '#f1f5f9', padding: '3px 8px', borderRadius: '5px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
-                                  {bookingResult.id}
-                                </span>
-                              </td>
-                            </tr>
-                            <tr>
-                              <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Venue (Hall)</td>
-                              <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>{selectedVenue?.name}</td>
-                            </tr>
-                            <tr>
-                              <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Date</td>
-                              <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>{bookingResult.bookingDate}</td>
-                            </tr>
-                            <tr>
-                              <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Time Schedule</td>
-                              <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>{bookingResult.startTime} - {bookingResult.endTime}</td>
-                            </tr>
-                            <tr>
-                              <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Department</td>
-                              <td style={{ padding: '12px 16px' }}>
-                                <span style={getDeptBadgeStyle(bookingResult.departmentName || bookingForm.departmentName)}>
-                                  {bookingResult.departmentName || bookingForm.departmentName}
-                                </span>
-                              </td>
-                            </tr>
-                            {(bookingResult.classYear || bookingForm.classYear) && (
-                              <tr>
-                                <td className="bg-light font-weight-bold text-secondary border-end" style={{ padding: '12px 16px' }}>Class / Year</td>
-                                <td className="font-weight-semibold text-dark" style={{ padding: '12px 16px' }}>
-                                  <span style={{ background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', fontWeight: 700, padding: '4px 10px', borderRadius: '6px', fontSize: '0.82rem', display: 'inline-block' }}>
-                                    {bookingResult.classYear || bookingForm.classYear}
-                                  </span>
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Notice Alert Box */}
-                  <div 
-                    className="d-flex align-items-center gap-3 p-3.5 mx-auto rounded-3 border text-start mb-4 animate-fade-in animate-duration-300"
-                    style={{ 
-                      maxWidth: '660px', 
-                      backgroundColor: '#e6fffa', 
-                      borderColor: '#b2f5ea',
-                      color: '#006d5b'
-                    }}
-                  >
-                    <div className="d-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm" style={{ width: '32px', height: '32px', flexShrink: 0 }}>
-                      <HelpCircle size={18} className="text-success" />
-                    </div>
-                    <div style={{ fontSize: '0.86rem', lineHeight: '1.4' }}>
-                      <strong>Important:</strong> An automated email/SMS confirmation has been dispatched to the faculty member with the booking details.
-                    </div>
-                  </div>
-
-                  {/* Actions buttons */}
-                  <div className="d-flex justify-content-center align-items-center flex-wrap gap-3">
-                    <button 
-                      type="button"
-                      className="btn d-flex align-items-center gap-2 px-4 py-3 rounded-pill font-weight-bold text-white shadow-sm transition-all"
-                      style={{ 
-                        background: 'linear-gradient(to right, #818cf8, #4f46e5)',
-                        border: 'none',
-                        fontSize: '0.92rem',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onClick={() => {
-                        // Reset booking flow
-                        setStep(1);
-                        setAvailForm({ venueId: '', bookingDate: '', startTime: '', endTime: '' });
-                        setBookingForm({ eventName: '', departmentName: '', facultyName: '', classYear: '', eventDescription: '', attendees: '' });
-                        setBookingResult(null);
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-1.5px)';
-                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(79, 70, 229, 0.25)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                    >
-                      <PlusCircle size={18} />
-                      Book Another Event
-                    </button>
-
-                    <button 
-                      type="button"
-                      className="btn d-flex align-items-center gap-2 px-4 py-3 rounded-pill font-weight-bold transition-all shadow-sm"
-                      style={{ 
-                        border: '2px solid #4f46e5', 
-                        color: '#4f46e5',
-                        backgroundColor: 'transparent',
-                        fontSize: '0.92rem',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onClick={() => downloadPDFReceipt(bookingResult)}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#eef2ff';
-                        e.currentTarget.style.transform = 'translateY(-1.5px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}
-                    >
-                      <Download size={18} />
-                      Download PDF Receipt
-                    </button>
-
-                    <button 
-                      type="button"
-                      className="btn d-flex align-items-center gap-2 px-4 py-3 rounded-pill font-weight-bold text-secondary transition-all border shadow-sm"
-                      style={{ 
-                        backgroundColor: '#f1f5f9',
-                        borderColor: '#cbd5e1',
-                        fontSize: '0.92rem',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onClick={() => navigate('/')}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#e2e8f0';
-                        e.currentTarget.style.color = '#0f172a';
-                        e.currentTarget.style.transform = 'translateY(-1.5px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f1f5f9';
-                        e.currentTarget.style.color = 'var(--secondary)';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}
-                    >
-                      <Home size={18} />
-                      Exit to Home
-                    </button>
-                  </div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#0284C7', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  Browser Launch
                 </div>
-              )}
+                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0F172A', margin: '0 0 10px' }}>
+                  Open PWA in Browser
+                </h3>
+                <p style={{ fontSize: '0.88rem', color: '#64748B', lineHeight: 1.5, margin: '0 0 20px' }}>
+                  Open the fully responsive PWA web portal right in your browser tab without any installation required.
+                </p>
 
+                <div style={{
+                  background: '#F8FAFC',
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  border: '1px solid #E2E8F0',
+                  marginBottom: 20
+                }}>
+                  <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600, marginBottom: 4 }}>
+                    Live PWA URL:
+                  </div>
+                  <code style={{ fontSize: '0.84rem', color: '#0284C7', fontWeight: 700, wordBreak: 'break-all' }}>
+                    {activeAppUrl}
+                  </code>
+                </div>
+              </div>
+
+              <a
+                href={activeAppUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #4F46E5 0%, #6366F1 100%)',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  fontSize: '0.96rem',
+                  fontWeight: 750,
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  boxShadow: '0 6px 18px rgba(79, 70, 229, 0.3)',
+                  boxSizing: 'border-box'
+                }}
+              >
+                Open PWA in Browser <ExternalLink size={18} />
+              </a>
             </div>
           </div>
-        </div>
 
-      </div>
+          {/* Step-by-Step PWA Installation Instructions */}
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '24px',
+            border: '1px solid #E2E8F0',
+            padding: '36px 32px',
+            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.04)',
+            marginBottom: 36
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 28 }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 14px',
+                borderRadius: '999px',
+                background: '#EEF2FF',
+                color: '#4F46E5',
+                fontSize: '0.78rem',
+                fontWeight: 750,
+                marginBottom: 10
+              }}>
+                <HelpCircle size={14} /> 1-Tap Home Screen Guide
+              </div>
+              <h2 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                How to Add the PWA to Your Phone
+              </h2>
+            </div>
 
-      {/* Rich Footer Component */}
+            {/* OS Selector Tabs */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 12,
+              marginBottom: 28
+            }}>
+              <button
+                onClick={() => setActiveTab('android')}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '12px',
+                  border: activeTab === 'android' ? '2px solid #10B981' : '1px solid #CBD5E1',
+                  background: activeTab === 'android' ? '#ECFDF5' : '#FFFFFF',
+                  color: activeTab === 'android' ? '#065F46' : '#64748B',
+                  fontWeight: 800,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                🤖 Android (Chrome)
+              </button>
+              <button
+                onClick={() => setActiveTab('ios')}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '12px',
+                  border: activeTab === 'ios' ? '2px solid #6366F1' : '1px solid #CBD5E1',
+                  background: activeTab === 'ios' ? '#EEF2FF' : '#FFFFFF',
+                  color: activeTab === 'ios' ? '#3730A3' : '#64748B',
+                  fontWeight: 800,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                🍎 Apple iPhone (Safari)
+              </button>
+            </div>
+
+            {/* Tab 1: Android PWA Guide */}
+            {activeTab === 'android' && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: 20
+              }}>
+                {[
+                  { step: '1', title: 'Open PWA in Chrome', desc: `Scan the QR code or visit ${networkInfo.lanUrl} in Google Chrome.` },
+                  { step: '2', title: 'Tap Three Dots (⋮)', desc: 'Tap the 3-dot options menu in the top-right corner of Chrome.' },
+                  { step: '3', title: 'Tap "Install App"', desc: 'Select "Install app" or "Add to Home screen" from the menu.' },
+                  { step: '4', title: 'Ready on Home Screen', desc: 'The Auditorium PWA icon appears on your home screen and launches in full screen!' }
+                ].map((s) => (
+                  <div key={s.step} style={{
+                    padding: '20px',
+                    borderRadius: '16px',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: '#10B981',
+                      color: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 800,
+                      fontSize: '0.9rem'
+                    }}>
+                      {s.step}
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A' }}>
+                      {s.title}
+                    </div>
+                    <div style={{ fontSize: '0.84rem', color: '#64748B', lineHeight: 1.45 }}>
+                      {s.desc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Tab 2: iPhone PWA Guide */}
+            {activeTab === 'ios' && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: 20
+              }}>
+                {[
+                  { step: '1', title: 'Open in Safari', desc: `Scan the QR code or visit ${networkInfo.lanUrl} using Safari on iOS.` },
+                  { step: '2', title: 'Tap Share Button', desc: 'Tap the Share icon (square with upward arrow) at the bottom toolbar.' },
+                  { step: '3', title: 'Add to Home Screen', desc: 'Scroll down the share sheet and tap "Add to Home Screen".' },
+                  { step: '4', title: 'Tap "Add"', desc: 'Tap "Add" in top-right. The PWA is ready with full-screen standalone experience!' }
+                ].map((s) => (
+                  <div key={s.step} style={{
+                    padding: '20px',
+                    borderRadius: '16px',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: '#6366F1',
+                      color: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 800,
+                      fontSize: '0.9rem'
+                    }}>
+                      {s.step}
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A' }}>
+                      {s.title}
+                    </div>
+                    <div style={{ fontSize: '0.84rem', color: '#64748B', lineHeight: 1.45 }}>
+                      {s.desc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </main>
+      )}
+
       <Footer />
     </div>
   );
 }
-

@@ -1,3 +1,6 @@
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -9,7 +12,14 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'], // Vite dev servers
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175'
+  ],
   credentials: true
 }));
 app.use(bodyParser.json());
@@ -29,24 +39,100 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
+// --- Dynamic Network & IP Information API ---
+app.get('/api/system/network-info', (req, res) => {
+  const os = require('os');
+  const ifaces = os.networkInterfaces();
+  let lanIp = 'localhost';
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        lanIp = iface.address;
+        break;
+      }
+    }
+  }
+  res.json({ lanIp, port: 3001, localUrl: 'http://localhost:3001', lanUrl: `http://${lanIp}:3001` });
+});
+
+// --- Faculty Phone Login API (Strict Status Verification) ---
+app.post('/api/auth/faculty-login', async (req, res) => {
+  const { mobile } = req.body;
+  if (!mobile || !String(mobile).trim()) {
+    return res.status(400).json({ error: 'Mobile number is required.' });
+  }
+
+  const digits = String(mobile).replace(/[^0-9]/g, '');
+  if (digits.length < 10) {
+    return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number.' });
+  }
+
+  try {
+    const faculty = await dbMysql.findFacultyByMobile(digits);
+    if (!faculty) {
+      return res.status(404).json({
+        error: 'Mobile number not registered. Please register first.',
+        notFound: true
+      });
+    }
+
+    const status = (faculty.status || 'Pending').trim().toLowerCase();
+
+    if (status === 'pending') {
+      return res.status(403).json({
+        error: 'Your registration is pending approval by the Admin. Please wait for verification.',
+        status: 'Pending'
+      });
+    }
+
+    if (status === 'rejected') {
+      return res.status(403).json({
+        error: 'Your registration was rejected by the administrator. Please contact college administration.',
+        status: 'Rejected'
+      });
+    }
+
+    // Approved / Active
+    req.session.userId = faculty.id;
+    req.session.role = 'faculty';
+    req.session.name = faculty.name;
+
+    res.json({
+      success: true,
+      user: {
+        id: faculty.id,
+        name: faculty.name,
+        email: faculty.email,
+        mobile: faculty.mobile,
+        departmentId: faculty.departmentId,
+        designationName: faculty.designationName || 'Faculty',
+        role: 'faculty',
+        status: faculty.status
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Auth APIs ---
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
-  
+
   const users = await dbMysql.getUsers();
   const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
-  
+
   if (!user) {
     return res.status(401).json({ error: 'Invalid username or password.' });
   }
-  
+
   req.session.userId = user.id;
   req.session.username = user.username;
   req.session.name = user.name;
-  
+
   res.json({ success: true, user: { id: user.id, username: user.username, name: user.name } });
 });
 
@@ -57,9 +143,9 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/session', (req, res) => {
   if (req.session && req.session.userId) {
-    res.json({ 
-      loggedIn: true, 
-      user: { id: req.session.userId, username: req.session.username, name: req.session.name } 
+    res.json({
+      loggedIn: true,
+      user: { id: req.session.userId, username: req.session.username, name: req.session.name }
     });
   } else {
     res.json({ loggedIn: false });
@@ -278,6 +364,152 @@ app.delete('/api/faculty/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Public registration for faculty / coordinators (Starts as Pending Admin Approval)
+app.post('/api/faculty/register', async (req, res) => {
+  const { firstName, lastName, name, email, mobile, department, designation, departmentId, designationId } = req.body;
+  
+  // Resolve first and last name
+  const finalFirstName = (firstName || '').trim();
+  const finalLastName = (lastName || '').trim();
+  let fullName = '';
+
+  if (finalFirstName && finalLastName) {
+    fullName = `${finalFirstName} ${finalLastName}`;
+  } else if (name && String(name).trim()) {
+    fullName = String(name).trim();
+  }
+
+  if (!finalFirstName && (!name || !name.trim())) {
+    return res.status(400).json({ error: 'First name is required.' });
+  }
+  if (!finalLastName && (!name || name.trim().split(/\s+/).length < 2)) {
+    return res.status(400).json({ error: 'Last name is required.' });
+  }
+  if (!fullName) {
+    return res.status(400).json({ error: 'Please enter both first name and last name.' });
+  }
+
+  // Email is COMPULSORY
+  if (!email || !String(email).trim()) {
+    return res.status(400).json({ error: 'Email address is compulsory. Please enter your email address.' });
+  }
+  const emailTrimmed = String(email).trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(emailTrimmed)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  if (!mobile || !String(mobile).trim()) {
+    return res.status(400).json({ error: 'Mobile number is required.' });
+  }
+
+  const cleanDigits = String(mobile).replace(/[^0-9]/g, '').slice(-10);
+  if (cleanDigits.length < 10) {
+    return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number.' });
+  }
+
+  try {
+    const existing = await dbMysql.findFacultyByMobile(cleanDigits);
+    if (existing) {
+      const st = (existing.status || 'Pending').toLowerCase();
+      if (st === 'approved' || st === 'active') {
+        return res.status(400).json({
+          error: 'An account with this mobile number is already approved! You can log in directly using this number.'
+        });
+      }
+      if (st === 'pending') {
+        return res.status(400).json({
+          error: 'Your registration request is already submitted and awaiting Admin approval. Please wait for verification.'
+        });
+      }
+      if (st === 'rejected') {
+        return res.status(400).json({
+          error: 'Your previous registration was rejected. Please contact the administrator.'
+        });
+      }
+    }
+
+    // Resolve department
+    let targetDeptId = departmentId;
+    if (!targetDeptId && department) {
+      const depts = await dbMysql.getDepartments();
+      const matchedDept = depts.find(d => (d.name || '').toLowerCase() === String(department).trim().toLowerCase());
+      if (matchedDept) {
+        targetDeptId = matchedDept.id;
+      } else {
+        const newD = await dbMysql.addDepartment(String(department).trim());
+        targetDeptId = newD.id;
+      }
+    }
+    if (!targetDeptId) targetDeptId = 'dept_1';
+
+    // Resolve designation
+    let targetDesigId = designationId;
+    if (!targetDesigId && designation) {
+      const desigs = await dbMysql.getDesignations();
+      const matchedDesig = desigs.find(d => (d.name || '').toLowerCase() === String(designation).trim().toLowerCase());
+      if (matchedDesig) {
+        targetDesigId = matchedDesig.id;
+      } else {
+        const newDesig = await dbMysql.addDesignation(String(designation).trim());
+        targetDesigId = newDesig.id;
+      }
+    }
+
+    const formattedMobile = `+91 ${cleanDigits.substring(0, 5)} ${cleanDigits.substring(5)}`;
+
+    const newFaculty = await dbMysql.addFaculty({
+      name: fullName.trim(),
+      email: emailTrimmed,
+      mobile: formattedMobile,
+      departmentId: targetDeptId,
+      designationId: targetDesigId,
+      status: 'Pending'
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration submitted successfully! Your account is pending admin approval.',
+      faculty: newFaculty
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin endpoint to Approve or Reject faculty
+app.patch('/api/faculty/:id/status', requireAuth, async (req, res) => {
+  const { status } = req.body;
+  const allowed = ['Approved', 'Rejected', 'Pending'];
+  if (!status || !allowed.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${allowed.join(', ')}` });
+  }
+
+  try {
+    const updated = await dbMysql.updateFacultyStatus(req.params.id, status);
+    if (!updated) return res.status(404).json({ error: 'Faculty member not found' });
+    res.json({ success: true, faculty: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/faculty/:id/status', requireAuth, async (req, res) => {
+  const { status } = req.body;
+  const allowed = ['Approved', 'Rejected', 'Pending'];
+  if (!status || !allowed.includes(status)) {
+    return res.status(400).json({ error: `Invalid status. Must be one of: ${allowed.join(', ')}` });
+  }
+
+  try {
+    const updated = await dbMysql.updateFacultyStatus(req.params.id, status);
+    if (!updated) return res.status(404).json({ error: 'Faculty member not found' });
+    res.json({ success: true, faculty: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Venues APIs ---
 app.get('/api/venues', async (req, res) => {
   try {
@@ -294,9 +526,9 @@ app.post('/api/venues', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Venue name and capacity are required' });
   }
   try {
-    const newVenue = await dbMysql.addVenue({ 
-      name, 
-      capacity: Number(capacity), 
+    const newVenue = await dbMysql.addVenue({
+      name,
+      capacity: Number(capacity),
       location,
       address: address || '',
       latitude: latitude ? Number(latitude) : null,
@@ -352,13 +584,13 @@ app.get('/api/bookings/:id', async (req, res) => {
     if (!booking) {
       return res.status(404).json({ error: 'Booking not found' });
     }
-    
+
     const [venues, departments, faculty] = await Promise.all([
       dbMysql.getVenues(),
       dbMysql.getDepartments(),
       dbMysql.getFaculty()
     ]);
-    
+
     const enrichedBooking = {
       ...booking,
       venueName: venues.find(v => v.id === booking.venueId)?.name || 'Unknown Venue',
@@ -369,7 +601,7 @@ app.get('/api/bookings/:id', async (req, res) => {
       deptName: booking.departmentName || 'Unknown Department',
       facultyName: booking.facultyName || 'Unknown Faculty'
     };
-    
+
     res.json(enrichedBooking);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -379,17 +611,17 @@ app.get('/api/bookings/:id', async (req, res) => {
 app.get('/api/venues/:venueId/bookings', async (req, res) => {
   const { date } = req.query;
   const { venueId } = req.params;
-  
+
   if (!venueId || !date) {
     return res.status(400).json({ error: 'Venue ID and Date are required.' });
   }
-  
+
   try {
     const bookings = await dbMysql.getBookings();
     const bookingsOnDay = bookings
-      .filter(b => 
-        b.venueId === venueId && 
-        b.bookingDate === date && 
+      .filter(b =>
+        b.venueId === venueId &&
+        b.bookingDate === date &&
         b.status !== "Cancelled"
       )
       .map(b => ({
@@ -398,7 +630,7 @@ app.get('/api/venues/:venueId/bookings', async (req, res) => {
         endTime: b.endTime,
         eventName: b.eventName
       }));
-      
+
     res.json(bookingsOnDay);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -408,11 +640,11 @@ app.get('/api/venues/:venueId/bookings', async (req, res) => {
 // Check availability API
 app.post('/api/bookings/check-availability', async (req, res) => {
   const { venueId, bookingDate, startTime, endTime, excludeBookingId } = req.body;
-  
+
   if (!venueId || !bookingDate || !startTime || !endTime) {
     return res.status(400).json({ error: 'Venue, Date, Start Time, and End Time are required.' });
   }
-  
+
   try {
     const now = new Date();
     const year = now.getFullYear();
@@ -426,29 +658,25 @@ app.post('/api/bookings/check-availability', async (req, res) => {
       return res.status(400).json({ isAvailable: false, error: 'Cannot book a venue for a past date.' });
     }
 
-    if (bookingDate === todayStr && startMins < minAllowedMins) {
-      const minH = String(Math.floor(minAllowedMins / 60)).padStart(2, '0');
-      const minM = String(minAllowedMins % 60).padStart(2, '0');
-      return res.status(400).json({ isAvailable: false, error: `Bookings for today must be scheduled at least 10 minutes in advance. Earliest start time for today is ${minH}:${minM}.` });
-    }
+
 
     const venuesList = await dbMysql.getVenues();
     const targetVenue = venuesList.find(v => v.id === venueId);
     if (targetVenue && (targetVenue.status === 'Maintenance' || targetVenue.status === 'Inactive')) {
-      return res.status(400).json({ 
-        isAvailable: false, 
-        error: `🔒 ${targetVenue.name} is currently under maintenance (${targetVenue.maintenanceReason || 'Scheduled Repair'}). Bookings are locked.` 
+      return res.status(400).json({
+        isAvailable: false,
+        error: `🔒 ${targetVenue.name} is currently under maintenance (${targetVenue.maintenanceReason || 'Scheduled Repair'}). Bookings are locked.`
       });
     }
 
     const isAvailable = await dbMysql.isSlotAvailable(venueId, bookingDate, startTime, endTime, excludeBookingId);
-    
+
     // Get all approved bookings for this venue on this date
     const bookings = await dbMysql.getBookings();
     const bookingsOnDay = bookings
-      .filter(b => 
-        b.venueId === venueId && 
-        b.bookingDate === bookingDate && 
+      .filter(b =>
+        b.venueId === venueId &&
+        b.bookingDate === bookingDate &&
         b.status !== "Cancelled" &&
         b.id !== excludeBookingId
       )
@@ -459,7 +687,7 @@ app.post('/api/bookings/check-availability', async (req, res) => {
       }));
 
     let alternatives = [];
-    
+
     if (!isAvailable) {
       // 1. Check other venues at the same time
       const venues = await dbMysql.getVenues();
@@ -478,7 +706,7 @@ app.post('/api/bookings/check-availability', async (req, res) => {
           });
         }
       }
-      
+
       // 2. Check the same venue at different times on the same date
       const toMins = (t) => {
         const [h, m] = t.split(':').map(Number);
@@ -489,20 +717,20 @@ app.post('/api/bookings/check-availability', async (req, res) => {
         const min = (m % 60).toString().padStart(2, '0');
         return `${h}:${min}`;
       };
-      
+
       const requestedDurationMins = toMins(endTime) - toMins(startTime);
       const testStartTimes = ["09:00", "11:30", "14:00", "16:30"];
       const recommendedTimes = [];
       const sameVenueObj = venues.find(v => v.id === venueId);
-      
+
       for (const start of testStartTimes) {
         const startMins = toMins(start);
         const endMins = startMins + requestedDurationMins;
         const endStr = toStr(endMins);
-        
+
         // Skip if exceeds operational hour 23:00 (1380 mins)
         if (endMins > 1380) continue;
-        
+
         // Skip if it overlaps with the requested time block itself
         if (
           (startMins >= toMins(startTime) && startMins < toMins(endTime)) ||
@@ -510,7 +738,7 @@ app.post('/api/bookings/check-availability', async (req, res) => {
         ) {
           continue;
         }
-        
+
         if (await dbMysql.isSlotAvailable(venueId, bookingDate, start, endStr)) {
           recommendedTimes.push({
             type: "time",
@@ -523,7 +751,7 @@ app.post('/api/bookings/check-availability', async (req, res) => {
           });
         }
       }
-      
+
       alternatives = [...recommendedVenues, ...recommendedTimes].slice(0, 3);
     }
 
@@ -534,19 +762,19 @@ app.post('/api/bookings/check-availability', async (req, res) => {
 });
 
 app.post('/api/bookings', async (req, res) => {
-  const { 
-    eventName, departmentName, facultyName, venueId, 
+  const {
+    eventName, departmentName, facultyName, venueId,
     eventDescription, bookingDate, startTime, endTime, attendees, coordinator: reqCoord, email: reqEmail, phone: reqPhone,
     classYear
   } = req.body;
-  
+
   const finalDept = (departmentName || '').trim();
   const finalFac = (facultyName || reqCoord || '').trim();
 
   if (!eventName || !finalDept || !finalFac || !venueId || !bookingDate || !startTime || !endTime) {
     return res.status(400).json({ error: 'Missing required booking details.' });
   }
-  
+
   try {
     const now = new Date();
     const year = now.getFullYear();
@@ -560,11 +788,7 @@ app.post('/api/bookings', async (req, res) => {
       return res.status(400).json({ error: 'Cannot book a venue for a past date.' });
     }
 
-    if (bookingDate === todayStr && startMins < minAllowedMins) {
-      const minH = String(Math.floor(minAllowedMins / 60)).padStart(2, '0');
-      const minM = String(minAllowedMins % 60).padStart(2, '0');
-      return res.status(400).json({ error: `Bookings for today must be scheduled at least 10 minutes in advance. Earliest start time is ${minH}:${minM}.` });
-    }
+
 
     // Double-check availability on the server to prevent race conditions
     const isAvailable = await dbMysql.isSlotAvailable(venueId, bookingDate, startTime, endTime);
@@ -591,7 +815,7 @@ app.post('/api/bookings', async (req, res) => {
       phone,
       classYear: (classYear || '').trim()
     });
-    
+
     res.status(201).json(newBooking);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -603,12 +827,12 @@ app.patch('/api/bookings/:id/status', requireAuth, async (req, res) => {
   if (!['Pending', 'Approved', 'Rejected'].includes(status)) {
     return res.status(400).json({ error: 'Invalid booking status' });
   }
-  
+
   try {
     const bookings = await dbMysql.getBookings();
     const booking = bookings.find(b => b.id === req.params.id);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
-    
+
     // If approving, make sure there is no double booking
     if (status === 'Approved') {
       const isAvailable = await dbMysql.isSlotAvailable(booking.venueId, booking.bookingDate, booking.startTime, booking.endTime, booking.id);
@@ -616,7 +840,7 @@ app.patch('/api/bookings/:id/status', requireAuth, async (req, res) => {
         return res.status(409).json({ error: 'Cannot approve: this slot conflicts with an already approved booking.' });
       }
     }
-    
+
     const updated = await dbMysql.updateBookingStatus(req.params.id, status);
     res.json(updated);
   } catch (err) {
@@ -672,7 +896,7 @@ app.patch('/api/bookings/:id/override', requireAuth, async (req, res) => {
 
       notificationTitle = `Booking Cancelled by Admin: ${targetBooking.eventName}`;
       notificationMsg = `Your auditorium booking "${targetBooking.eventName}" on ${targetBooking.bookingDate} (${targetBooking.startTime} - ${targetBooking.endTime}) was cancelled by Administrator. Reason: "${reason.trim()}".`;
-    } 
+    }
     else if (action === 'reassign') {
       if (!newDetails || !newDetails.eventName || !newDetails.eventName.trim()) {
         return res.status(400).json({ error: 'New event name is required for reassigning.' });
@@ -692,7 +916,7 @@ app.patch('/api/bookings/:id/override', requireAuth, async (req, res) => {
 
       notificationTitle = `Booking Reassigned by Admin: ${targetBooking.eventName}`;
       notificationMsg = `Your auditorium booking "${targetBooking.eventName}" on ${targetBooking.bookingDate} was reassigned to priority event "${newDetails.eventName}" by Administrator. Reason: "${reason.trim()}".`;
-    } 
+    }
     else if (action === 'reschedule') {
       if (!newDetails || !newDetails.bookingDate || !newDetails.startTime || !newDetails.endTime) {
         return res.status(400).json({ error: 'New booking date, start time, and end time are required for rescheduling.' });
@@ -814,12 +1038,12 @@ app.post('/api/users', requireAuth, async (req, res) => {
   if (!username || !password || !name) {
     return res.status(400).json({ error: 'Username, password, and name are required' });
   }
-  
+
   try {
     const users = await dbMysql.getUsers();
     const exists = users.find(u => u.username.toLowerCase() === username.toLowerCase());
     if (exists) return res.status(400).json({ error: 'Username already exists' });
-    
+
     const newUser = await dbMysql.addUser({ username, password, name });
     const { password: _, ...userWithoutPassword } = newUser;
     res.status(201).json(userWithoutPassword);
@@ -863,6 +1087,84 @@ app.delete('/api/users/:id', requireAuth, async (req, res) => {
 
 // --- GPS Attendance APIs ---
 
+// POST /api/attendance/create-instant-session — Faculty creates live session on-the-spot
+// No admin approval needed: creates a Confirmed + immediately OPEN booking
+app.post('/api/attendance/create-instant-session', async (req, res) => {
+  const {
+    eventName, facultyName, departmentName, email, phone,
+    classYear, roomName, radius, windowMins, pin,
+    latitude, longitude, attendees
+  } = req.body;
+
+  if (!eventName || !eventName.toString().trim()) {
+    return res.status(400).json({ error: 'Event / Lecture title is required.' });
+  }
+  if (!facultyName || !facultyName.toString().trim()) {
+    return res.status(400).json({ error: 'Faculty name is required.' });
+  }
+
+  try {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const startTimeStr = now.toTimeString().slice(0, 5);
+
+    const winMins = Math.max(5, Math.min(120, Number(windowMins || 15)));
+    const windowEnd = new Date(now.getTime() + winMins * 60 * 1000);
+    const windowEndStr = windowEnd.toTimeString().slice(0, 5);
+
+    const sessionPin = (pin && pin.toString().trim()) ? pin.toString().trim() : Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Create booking record directly as Confirmed + OPEN
+    const newBooking = await dbMysql.addBooking({
+      eventName: eventName.toString().trim(),
+      departmentName: (departmentName || 'General').toString().trim(),
+      facultyName: facultyName.toString().trim(),
+      venueId: null,
+      eventDescription: `Instant live session created by faculty. Room: ${roomName || 'Unspecified'}`,
+      bookingDate: todayStr,
+      startTime: startTimeStr,
+      endTime: windowEndStr,
+      attendees: Number(attendees || 60),
+      status: 'Confirmed',
+      attendanceStatus: 'OPEN',
+      attendanceWindowStart: now.toISOString().replace('T', ' ').slice(0, 19),
+      attendanceWindowEnd: windowEnd.toISOString().replace('T', ' ').slice(0, 19),
+      coordinator: facultyName.toString().trim(),
+      email: (email || '').toString().trim(),
+      phone: (phone || '').toString().trim(),
+      classYear: (classYear || '').toString().trim()
+    });
+
+    // Update with GPS + PIN + sessionRadius
+    const finalLat = (latitude !== undefined && latitude !== null && latitude !== '') ? Number(latitude) : null;
+    const finalLon = (longitude !== undefined && longitude !== null && longitude !== '') ? Number(longitude) : null;
+
+    await dbMysql.updateBooking(newBooking.id, {
+      sessionLatitude: finalLat,
+      sessionLongitude: finalLon,
+      sessionPin: sessionPin
+    });
+
+    // Return enriched session
+    const updatedBooking = {
+      ...newBooking,
+      sessionLatitude: finalLat,
+      sessionLongitude: finalLon,
+      sessionPin: sessionPin,
+      venueName: (roomName || 'Live Session').toString().trim(),
+      presentCount: 0,
+      secondsRemaining: winMins * 60
+    };
+
+    res.json(updatedBooking);
+  } catch (err) {
+    console.error('Error creating instant session:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 // Helper function to calculate distance using Haversine formula
 function getDistance(lat1, lon1, lat2, lon2) {
   const R = 6371e3; // Earth's radius in metres
@@ -872,16 +1174,16 @@ function getDistance(lat1, lon1, lat2, lon2) {
   const deltaLambda = (lon2 - lon1) * Math.PI / 180;
 
   const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-            Math.cos(phi1) * Math.cos(phi2) *
-            Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+    Math.cos(phi1) * Math.cos(phi2) *
+    Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c; // distance in metres
 }
 
-// Start Attendance
+// Start Attendance (Faculty Side)
 app.post('/api/bookings/:id/start-attendance', async (req, res) => {
-  const { windowMins } = req.body;
+  const { windowMins, latitude, longitude, pin } = req.body;
   try {
     const bookings = await dbMysql.getBookings();
     const booking = bookings.find(b => b.id === req.params.id);
@@ -892,7 +1194,16 @@ app.post('/api/bookings/:id/start-attendance', async (req, res) => {
       return res.status(400).json({ error: 'Cannot start attendance for cancelled bookings.' });
     }
 
-    const updatedBooking = await dbMysql.startAttendance(req.params.id, Number(windowMins || 15));
+    // Generate a 4-digit PIN if not provided
+    const sessionPin = pin && pin.toString().trim() ? pin.toString().trim() : Math.floor(1000 + Math.random() * 9000).toString();
+
+    const updatedBooking = await dbMysql.startAttendance(
+      req.params.id,
+      Number(windowMins || 15),
+      latitude !== undefined && latitude !== null && latitude !== '' ? Number(latitude) : null,
+      longitude !== undefined && longitude !== null && longitude !== '' ? Number(longitude) : null,
+      sessionPin
+    );
     res.json(updatedBooking);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -924,12 +1235,170 @@ app.get('/api/bookings/:id/attendance', async (req, res) => {
   }
 });
 
+// GET /api/attendance/today-sessions - Today's Live Sessions Hub (Smart Event Selector)
+app.get('/api/attendance/today-sessions', async (req, res) => {
+  try {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    const [bookings, venues, allAttendance] = await Promise.all([
+      dbMysql.getBookings(),
+      dbMysql.getVenues(),
+      dbMysql.getAttendanceRecords()
+    ]);
+
+    const venueMap = {};
+    venues.forEach(v => { venueMap[v.id] = v; });
+
+    const attendanceCountMap = {};
+    allAttendance.forEach(a => {
+      attendanceCountMap[a.bookingId] = (attendanceCountMap[a.bookingId] || 0) + 1;
+    });
+
+    const searchQuery = (req.query.q || '').trim().toLowerCase();
+    const filterDate = req.query.date || null;
+
+    // Filter relevant bookings (today's bookings OR currently open sessions OR matching query)
+    const filtered = [];
+
+    for (const b of bookings) {
+      // Skip cancelled
+      if (b.status === 'Cancelled' || b.status === 'cancelled_by_admin') continue;
+
+      // Auto-close if window expired
+      if (b.attendanceStatus === 'OPEN' && b.attendanceWindowEnd && now > new Date(b.attendanceWindowEnd)) {
+        await dbMysql.stopAttendance(b.id);
+        b.attendanceStatus = 'CLOSED';
+      }
+
+      const venue = venueMap[b.venueId] || {};
+      const isToday = b.bookingDate === todayStr;
+      const isOpen = b.attendanceStatus === 'OPEN';
+      const isDateMatch = (filterDate && filterDate !== 'all') ? (b.bookingDate === filterDate || isOpen) : true;
+
+      const searchMatch = !searchQuery ||
+        (b.eventName || '').toLowerCase().includes(searchQuery) ||
+        (b.facultyName || '').toLowerCase().includes(searchQuery) ||
+        (b.departmentName || '').toLowerCase().includes(searchQuery) ||
+        (b.coordinator || '').toLowerCase().includes(searchQuery) ||
+        (venue.name || '').toLowerCase().includes(searchQuery) ||
+        (b.id || '').toLowerCase().includes(searchQuery);
+
+      if ((isDateMatch || searchQuery) && searchMatch) {
+        let secondsRemaining = 0;
+        if (b.attendanceStatus === 'OPEN' && b.attendanceWindowEnd) {
+          const diffMs = new Date(b.attendanceWindowEnd).getTime() - now.getTime();
+          secondsRemaining = Math.max(0, Math.floor(diffMs / 1000));
+        }
+
+        filtered.push({
+          ...b,
+          venueName: venue.name || 'Auditorium / Hall',
+          venueLocation: venue.location || '',
+          presentCount: attendanceCountMap[b.id] || 0,
+          secondsRemaining
+        });
+      }
+    }
+
+    // Sort: OPEN sessions first, then by bookingDate desc, then by startTime
+    filtered.sort((a, b) => {
+      if (a.attendanceStatus === 'OPEN' && b.attendanceStatus !== 'OPEN') return -1;
+      if (b.attendanceStatus === 'OPEN' && a.attendanceStatus !== 'OPEN') return 1;
+      if (a.bookingDate !== b.bookingDate) return b.bookingDate.localeCompare(a.bookingDate);
+      return (a.startTime || '').localeCompare(b.startTime || '');
+    });
+
+    res.json({
+      todayStr,
+      sessions: filtered
+    });
+  } catch (err) {
+    console.error('Error in /api/attendance/today-sessions:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/attendance/archive - Lifetime Attendance Archive
+app.get('/api/attendance/archive', async (req, res) => {
+  try {
+    const [bookings, venues, allAttendance] = await Promise.all([
+      dbMysql.getBookings(),
+      dbMysql.getVenues(),
+      dbMysql.getAttendanceRecords()
+    ]);
+
+    const venueMap = {};
+    venues.forEach(v => { venueMap[v.id] = v; });
+
+    const attendanceByBooking = {};
+    allAttendance.forEach(a => {
+      if (!attendanceByBooking[a.bookingId]) {
+        attendanceByBooking[a.bookingId] = [];
+      }
+      attendanceByBooking[a.bookingId].push(a);
+    });
+
+    const searchQuery = (req.query.q || '').trim().toLowerCase();
+    const fromDate = req.query.from || null;
+    const toDate = req.query.to || null;
+
+    const archiveList = bookings
+      .filter(b => {
+        if (b.status === 'Cancelled' || b.status === 'cancelled_by_admin') return false;
+        if (fromDate && b.bookingDate < fromDate) return false;
+        if (toDate && b.bookingDate > toDate) return false;
+
+        if (searchQuery) {
+          const venue = venueMap[b.venueId] || {};
+          const match = (b.eventName || '').toLowerCase().includes(searchQuery) ||
+            (b.facultyName || '').toLowerCase().includes(searchQuery) ||
+            (b.departmentName || '').toLowerCase().includes(searchQuery) ||
+            (venue.name || '').toLowerCase().includes(searchQuery) ||
+            (b.id || '').toLowerCase().includes(searchQuery);
+          if (!match) return false;
+        }
+        return true;
+      })
+      .map(b => {
+        const records = attendanceByBooking[b.id] || [];
+        const venue = venueMap[b.venueId] || {};
+        return {
+          id: b.id,
+          eventName: b.eventName,
+          facultyName: b.facultyName || b.coordinator || 'Faculty',
+          departmentName: b.departmentName || 'General',
+          classYear: b.classYear || '',
+          venueName: venue.name || 'Auditorium / Hall',
+          bookingDate: b.bookingDate,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          attendees: b.attendees || 0,
+          presentCount: records.length,
+          attendanceStatus: b.attendanceStatus,
+          hasRecords: records.length > 0
+        };
+      });
+
+    // Sort by bookingDate descending
+    archiveList.sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
+
+    res.json(archiveList);
+  } catch (err) {
+    console.error('Error in /api/attendance/archive:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Mark Attendance (Student Side - Public Endpoint)
 app.post('/api/attendance/mark', async (req, res) => {
-  const { bookingId, rollNumber, studentName, classStream, latitude, longitude } = req.body;
+  const { bookingId, rollNumber, studentName, classStream, latitude, longitude, pin } = req.body;
 
   if (!bookingId || !rollNumber || !studentName || !classStream) {
-    return res.status(400).json({ error: 'Booking ID, Roll Number, Student Name, and Class/Stream are required.' });
+    return res.status(400).json({ error: 'Session/Booking, Roll Number, Student Name, and Class/Stream are required.' });
   }
 
   try {
@@ -937,7 +1406,7 @@ app.post('/api/attendance/mark', async (req, res) => {
     const bookings = await dbMysql.getBookings();
     const booking = bookings.find(b => b.id === bookingId);
     if (!booking) {
-      return res.status(404).json({ error: 'Booking ID not found.' });
+      return res.status(404).json({ error: 'Session not found. Please verify the Session selected.' });
     }
 
     // 2. Verify the booking is active/confirmed
@@ -954,73 +1423,104 @@ app.post('/api/attendance/mark', async (req, res) => {
 
     // 3. Verify attendance is currently OPEN
     if (booking.attendanceStatus !== 'OPEN') {
-      return res.status(400).json({ error: 'Attendance is currently CLOSED for this event.' });
+      return res.status(400).json({ error: 'Attendance session is CLOSED for this event. Please ask Faculty to start attendance.' });
     }
 
     // 4. Verify current time is within window
     const windowStart = new Date(booking.attendanceWindowStart);
     const windowEnd = new Date(booking.attendanceWindowEnd);
     if (now < windowStart || now > windowEnd) {
-      return res.status(400).json({ error: 'Attendance window has expired or has not started.' });
+      return res.status(400).json({ error: 'Attendance window has expired or is no longer active.' });
     }
 
-    // 5. Retrieve the venue details
-    const venues = await dbMysql.getVenues();
-    const venue = venues.find(v => v.id === booking.venueId);
-    if (!venue) {
-      return res.status(400).json({ error: 'Associated venue not found.' });
+    // 5. Verify 4-Digit Live PIN if configured
+    if (booking.sessionPin) {
+      const studentPin = (pin || '').toString().trim();
+      const expectedPin = booking.sessionPin.toString().trim();
+      if (!studentPin || studentPin !== expectedPin) {
+        return res.status(400).json({
+          error: 'Incorrect 4-Digit Attendance PIN. Please check the board or ask your Faculty.'
+        });
+      }
     }
 
-    // 6. Check GPS Location
-    if (latitude === undefined || longitude === undefined || latitude === null || longitude === null) {
-      return res.status(400).json({ error: 'GPS coordinates are required to verify location.' });
+    // 6. Dynamic Faculty-Anchored GPS Geofence Check (100m radius)
+    let anchorLat = null;
+    let anchorLon = null;
+    let anchorSource = '';
+
+    if (booking.sessionLatitude !== null && booking.sessionLongitude !== null && booking.sessionLatitude !== undefined && booking.sessionLongitude !== undefined) {
+      anchorLat = Number(booking.sessionLatitude);
+      anchorLon = Number(booking.sessionLongitude);
+      anchorSource = 'Faculty Live Location';
+    } else {
+      // Fallback to venue coordinates if faculty did not capture GPS
+      const venues = await dbMysql.getVenues();
+      const venue = venues.find(v => v.id === booking.venueId);
+      if (venue && venue.latitude && venue.longitude) {
+        anchorLat = Number(venue.latitude);
+        anchorLon = Number(venue.longitude);
+        anchorSource = `${venue.name} Location`;
+      }
     }
 
-    const studentLat = Number(latitude);
-    const studentLon = Number(longitude);
-    const venueLat = Number(venue.latitude || 0);
-    const venueLon = Number(venue.longitude || 0);
-    const allowedRadius = Number(venue.radius || 50); // meters
+    let calculatedDistance = 0;
+    const allowedRadius = 100; // Universal 100-meter geofence
 
-    if (!venueLat || !venueLon) {
-      return res.status(400).json({ error: 'Venue GPS coordinates are not configured by Admin.' });
+    if (anchorLat !== null && anchorLon !== null && !isNaN(anchorLat) && !isNaN(anchorLon) && anchorLat !== 0 && anchorLon !== 0) {
+      // Location is required for student if anchor is set
+      if (latitude === undefined || longitude === undefined || latitude === null || longitude === null || latitude === '' || longitude === '') {
+        return res.status(400).json({ error: 'GPS location permission is required. Please enable device location and tap Check-In again.' });
+      }
+
+      const studentLat = Number(latitude);
+      const studentLon = Number(longitude);
+
+      if (isNaN(studentLat) || isNaN(studentLon)) {
+        return res.status(400).json({ error: 'Invalid GPS coordinates received.' });
+      }
+
+      calculatedDistance = getDistance(studentLat, studentLon, anchorLat, anchorLon);
+
+      // We allow up to 100 meters (with a 25m buffer for indoor GPS phone drift)
+      const maxAllowedMeters = allowedRadius + 25; // 125m tolerance for indoor classroom drift
+      if (calculatedDistance > maxAllowedMeters) {
+        return res.status(400).json({
+          error: `Proxy Protection: You are outside the 100m classroom/auditorium radius. Distance: ${Math.round(calculatedDistance)}m from ${anchorSource}. (Allowed: ≤100m)`
+        });
+      }
     }
 
-    // Calculate distance
-    const distance = getDistance(studentLat, studentLon, venueLat, venueLon);
-
-    // 7. Reject if outside radius
-    if (distance > allowedRadius) {
-      return res.status(400).json({ 
-        error: `You are outside the allowed area. Distance: ${Math.round(distance)}m, Allowed: ${allowedRadius}m.` 
-      });
-    }
-
-    // 8 & 9. Check duplicate roll number
-    const hasMarked = await dbMysql.hasMarkedAttendance(bookingId, rollNumber);
+    // 7. Check duplicate roll number
+    const hasMarked = await dbMysql.hasMarkedAttendance(bookingId, rollNumber.trim());
     if (hasMarked) {
-      return res.status(400).json({ error: 'Attendance has already been marked for this event.' });
+      return res.status(400).json({ error: `Attendance has already been marked for Roll Number "${rollNumber.trim()}".` });
     }
 
-    // 10. Save attendance
+    // 8. Save attendance record
     const record = await dbMysql.addAttendanceRecord({
       bookingId,
-      venueId: booking.venueId,
-      rollNumber,
-      studentName,
-      classStream,
-      latitude: studentLat,
-      longitude: studentLon,
-      distanceFromVenue: Math.round(distance * 100) / 100, // round to 2 decimals
+      rollNumber: rollNumber.trim().toUpperCase(),
+      studentName: studentName.trim(),
+      classStream: classStream.trim(),
+      latitude: latitude ? Number(latitude) : 0,
+      longitude: longitude ? Number(longitude) : 0,
+      distanceFromVenue: Math.round(calculatedDistance * 10) / 10,
       status: 'Present'
     });
 
-    res.status(201).json({ 
-      success: true, 
-      message: 'Attendance marked successfully!', 
-      record 
+    res.status(201).json({
+      success: true,
+      message: 'Attendance marked successfully!',
+      record: {
+        ...record,
+        eventName: booking.eventName,
+        facultyName: booking.facultyName,
+        bookingDate: booking.bookingDate
+      }
     });
   } catch (err) {
+    console.error('Error marking attendance:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1040,7 +1540,7 @@ function buildExcelSheet(sheetName, headers, rows) {
     return `<tr>${cells}</tr>`;
   }).join('');
 
-  return `<Worksheet ss:Name="${sheetName}"><Table>${tableHeader ? `<Row>${headers.map(h => `<Cell><Data ss:Type="String">${h}</Data></Cell>`).join('')}</Row>` : ''}${rows.map(row => `<Row>${row.map(cell => `<Cell><Data ss:Type="String">${cell !== undefined && cell !== null ? String(cell).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : ''}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`;
+  return `<Worksheet ss:Name="${sheetName}"><Table>${tableHeader ? `<Row>${headers.map(h => `<Cell><Data ss:Type="String">${h}</Data></Cell>`).join('')}</Row>` : ''}${rows.map(row => `<Row>${row.map(cell => `<Cell><Data ss:Type="String">${cell !== undefined && cell !== null ? String(cell).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''}</Data></Cell>`).join('')}</Row>`).join('')}</Table></Worksheet>`;
 }
 
 // Helper: Build full multi-sheet Excel workbook (HTML table format for .xls compat)
@@ -1189,13 +1689,83 @@ app.get('/api/admin/backup', async (req, res) => {
 });
 
 app.post('/api/admin/restore', requireAuth, async (req, res) => {
-  const { backupData } = req.body;
-  if (!backupData || !backupData.data) {
+  const payload = req.body?.data || req.body?.backupData?.data || req.body?.backupData;
+  if (!payload) {
     return res.status(400).json({ error: 'Invalid backup format. Missing root data object.' });
   }
   try {
-    const result = await dbMysql.restoreFullBackup(backupData.data);
+    const result = await dbMysql.restoreFullBackup(payload);
     res.json({ success: true, message: 'System restored successfully!', details: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/stats', async (req, res) => {
+  try {
+    const [bookings, faculty, venues, departments] = await Promise.all([
+      dbMysql.getBookings(),
+      dbMysql.getFaculty(),
+      dbMysql.getVenues(),
+      dbMysql.getDepartments()
+    ]);
+    res.json({
+      totalBookings: bookings.length,
+      totalVenues: venues.length,
+      totalFaculty: faculty.length,
+      totalDepartments: departments.length,
+      venueStats: venues.map(v => ({ id: v.id, name: v.name, count: bookings.filter(b => b.venueId === v.id).length })),
+      deptStats: [...new Set(bookings.map(b => b.departmentName).filter(Boolean))].map(name => ({ id: name, name, count: bookings.filter(b => b.departmentName === name).length }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/attendance/session/:id', async (req, res) => {
+  try {
+    const records = await dbMysql.getAttendance(req.params.id);
+    res.json({ records, count: records.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/users', requireAuth, async (req, res) => {
+  try {
+    const users = await dbMysql.getUsers();
+    res.json(users.map(({ password, ...u }) => u));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/users', requireAuth, async (req, res) => {
+  try {
+    const newUser = await dbMysql.addUser(req.body);
+    res.status(201).json(newUser);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/users/:id', requireAuth, async (req, res) => {
+  try {
+    const success = await dbMysql.deleteUser(req.params.id);
+    res.json({ success });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/bookings/:id/cancel', requireAuth, async (req, res) => {
+  try {
+    const reason = req.body?.reason || 'Cancelled by Administrator';
+    const updated = await dbMysql.updateBooking(req.params.id, {
+      status: 'cancelled_by_admin',
+      attendanceStatus: 'CLOSED'
+    });
+    res.json({ success: true, booking: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

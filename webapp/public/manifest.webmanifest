@@ -1,0 +1,31 @@
+{
+  "name": "Kirti Auditorium & Attendance",
+  "short_name": "Auditorium",
+  "description": "College Auditorium Booking & GPS Attendance System for Kirti M. Doongursee College",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "categories": ["education", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mark Attendance",
+      "url": "/?tab=attendance",
+      "description": "Quick GPS Check-in for current lecture or event"
+    },
+    {
+      "name": "Book Venue",
+      "url": "/?tab=booking",
+      "description": "Reserve auditorium or seminar hall"
+    }
+  ]
+}

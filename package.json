@@ -6,10 +6,16 @@
   "scripts": {
     "install-backend": "cd backend && npm install",
     "install-frontend": "cd frontend && npm install",
-    "install-all": "npm install && npm run install-backend && npm run install-frontend",
+    "install-webapp": "cd webapp && npm install",
+    "install-admin-app": "cd admin-app && npm install",
+    "install-all": "npm install && npm run install-backend && npm run install-frontend && npm run install-webapp && npm run install-admin-app",
     "server": "cd backend && npm start",
     "client": "cd frontend && npm run dev",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "webapp": "cd webapp && npm run dev",
+    "admin-app": "cd admin-app && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "user-admin": "concurrently -n \"SERVER,USER,ADMIN\" -c \"blue,green,magenta\" \"npm run server\" \"npm run webapp\" \"npm run admin-app\"",
+    "dev-all": "concurrently \"npm run server\" \"npm run client\" \"npm run webapp\" \"npm run admin-app\""
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

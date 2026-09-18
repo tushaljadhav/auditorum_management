@@ -15,6 +15,7 @@ function ScrollToTop() {
 // Import Pages
 import Home from './pages/Home';
 import BookingPortal from './pages/BookingPortal';
+import AdminAccessPortal from './pages/AdminAccessPortal';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminVenues from './pages/AdminVenues';
@@ -41,7 +42,9 @@ export default function App() {
         <Route path="/features" element={<Features />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/contact" element={<Contact />} />
-        <Route path="/booking" element={<BookingPortal />} />
+        <Route path="/faculty-access" element={<BookingPortal />} />
+        <Route path="/booking" element={<Navigate to="/faculty-access" replace />} />
+        <Route path="/admin-access" element={<AdminAccessPortal />} />
         <Route path="/attendance" element={<StudentAttendance />} />
         <Route path="/admin/login" element={<AdminLogin />} />
 
