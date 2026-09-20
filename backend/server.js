@@ -42,7 +42,27 @@ app.use(cookieSession({
   secure: process.env.NODE_ENV === 'production'
 }));
 
-// Health Check Route
+// Root & Health Check Routes
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head><title>Auditorium Backend API</title></head>
+      <body style="font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #0f172a; color: white;">
+        <div style="text-align: center; background: #1e293b; padding: 40px 50px; border-radius: 18px; border: 1px solid #334155; box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-width: 480px;">
+          <div style="font-size: 52px; margin-bottom: 12px;">🚀</div>
+          <h1 style="margin: 0 0 10px 0; font-size: 24px; font-weight: 700;">Auditorium Backend API is Live!</h1>
+          <p style="color: #94a3b8; margin: 0 0 20px 0; font-size: 14px;">Database: <strong style="color: #38bdf8;">${useSupabase ? 'Supabase PostgreSQL (Mumbai ap-south-1)' : 'FreeSQLDatabase'}</strong></p>
+          <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; border-radius: 999px; font-size: 14px; font-weight: 600;">
+            <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%;"></span>
+            System Healthy & Operational
+          </div>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
