@@ -88,6 +88,23 @@ const requireAuth = (req, res, next) => {
 
 // --- Dynamic Network & IP Information API ---
 app.get('/api/system/network-info', (req, res) => {
+  const isCloud = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
+  const prodFacultyUrl = process.env.FACULTY_APP_URL || 'https://auditorium-faculty.vercel.app';
+  const prodAdminUrl = process.env.ADMIN_APP_URL || 'https://auditorium-admin.vercel.app';
+  const prodPortalUrl = process.env.PORTAL_URL || 'https://kirti-auditorium.vercel.app';
+
+  if (isCloud) {
+    return res.json({
+      lanIp: 'auditorium-faculty.vercel.app',
+      port: 443,
+      localUrl: prodFacultyUrl,
+      lanUrl: prodFacultyUrl,
+      facultyUrl: prodFacultyUrl,
+      adminUrl: prodAdminUrl,
+      portalUrl: prodPortalUrl
+    });
+  }
+
   const os = require('os');
   const ifaces = os.networkInterfaces();
   let lanIp = 'localhost';
@@ -99,7 +116,15 @@ app.get('/api/system/network-info', (req, res) => {
       }
     }
   }
-  res.json({ lanIp, port: 3001, localUrl: 'http://localhost:3001', lanUrl: `http://${lanIp}:3001` });
+  res.json({
+    lanIp,
+    port: 3001,
+    localUrl: 'http://localhost:3001',
+    lanUrl: `http://${lanIp}:3001`,
+    facultyUrl: `http://${lanIp}:3001`,
+    adminUrl: `http://${lanIp}:3002`,
+    portalUrl: `http://${lanIp}:3000`
+  });
 });
 
 // --- Faculty Phone Login API (Strict Status Verification) ---

@@ -159,11 +159,10 @@ export const sessionManager = {
 // ── Shareable Attendance URL Builder ──
 // Faculty creates session on webapp → generates URL for students to open on main website
 export const buildAttendanceUrl = (bookingId) => {
-  // Try to figure out the frontend URL
-  // In development: frontend runs on port 3000, webapp on 3001
-  // In production: customize this to your actual domain
   const { protocol, hostname } = window.location;
-  const port = hostname === 'localhost' ? '3000' : '';
-  const base = port ? `${protocol}//${hostname}:${port}` : `${protocol}//${hostname}`;
-  return `${base}/attendance?bookingId=${bookingId}`;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${protocol}//${hostname}:3000/attendance?bookingId=${bookingId}`;
+  }
+  const portalBase = import.meta.env.VITE_PORTAL_URL || 'https://kirti-auditorium.vercel.app';
+  return `${portalBase}/attendance?bookingId=${bookingId}`;
 };
