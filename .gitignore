@@ -31,3 +31,7 @@ yarn-error.log*
 
 # Temporary / OS junk
 Thumbs.db
+
+# Large resources and backups
+resources/
+backup_archive/
