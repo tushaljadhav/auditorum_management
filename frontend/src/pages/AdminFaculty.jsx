@@ -94,16 +94,40 @@ export default function AdminFaculty() {
   };
 
   const handleStatusChange = async (id, name, newStatus) => {
-    const actionLabel = newStatus === 'Approved' ? 'Approve' : newStatus === 'Rejected' ? 'Reject' : 'Reset';
+    if (newStatus === 'Rejected') {
+      const confirm = await Swal.fire({
+        title: `Reject Registration?`,
+        html: `Reject and remove registration request for <strong>${name}</strong>?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Reject & Remove',
+        confirmButtonColor: '#EF4444',
+        cancelButtonColor: '#64748B',
+        borderRadius: '16px'
+      });
+      if (!confirm.isConfirmed) return;
+      try {
+        const res = await fetch(`/api/faculty/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          Swal.fire({ icon: 'success', title: 'Registration Rejected & Removed', timer: 1200, showConfirmButton: false });
+          fetchData();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to remove registration.' });
+        }
+      } catch {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Server error occurred.' });
+      }
+      return;
+    }
+
+    const actionLabel = newStatus === 'Approved' ? 'Approve' : 'Reset';
     const confirm = await Swal.fire({
       title: `${actionLabel} ${name}?`,
-      text: newStatus === 'Approved'
-        ? 'User will immediately be able to log in to the Mobile App using their registered phone number.'
-        : 'User will be blocked from logging into the mobile app.',
-      icon: newStatus === 'Approved' ? 'question' : 'warning',
+      text: 'User will immediately be able to log in to the Mobile App using their registered phone number.',
+      icon: 'question',
       showCancelButton: true,
       confirmButtonText: `Yes, ${actionLabel}`,
-      confirmButtonColor: newStatus === 'Approved' ? '#10B981' : '#EF4444',
+      confirmButtonColor: '#10B981',
       cancelButtonColor: '#64748B',
       borderRadius: '16px'
     });

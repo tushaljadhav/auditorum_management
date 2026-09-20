@@ -67,6 +67,32 @@ export default function Faculty() {
     }
   };
 
+  const handleRejectPending = async (id, name) => {
+    const result = await Swal.fire({
+      title: 'Reject Registration?',
+      html: `Reject and remove registration request for <strong>${name}</strong>?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#EF4444',
+      cancelButtonColor: '#64748B',
+      confirmButtonText: 'Yes, Reject & Remove',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) return;
+
+    setActionLoadingId(id);
+    try {
+      await adminApi.deleteFaculty(id);
+      Swal.fire({ icon: 'success', title: 'Registration Rejected & Removed', timer: 1100, showConfirmButton: false });
+      loadFaculty();
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Action Failed', text: err.message });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const handleDelete = async (id, name) => {
     const result = await Swal.fire({
       title: 'Delete Faculty?',
@@ -418,7 +444,7 @@ export default function Faculty() {
 
                         <button
                           disabled={isActing}
-                          onClick={() => handleUpdateStatus(item.id, item.name, 'Rejected')}
+                          onClick={() => handleRejectPending(item.id, item.name)}
                           style={{
                             padding: '6px 10px',
                             fontSize: 11,

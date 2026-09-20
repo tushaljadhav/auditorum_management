@@ -1,7 +1,7 @@
 // API Client for Kirti Auditorium User PWA
 // Self-contained — no imports from other folders
 
-const BASE_URL = '/api';
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 async function fetchJSON(url, options = {}) {
   const response = await fetch(`${BASE_URL}${url}`, {

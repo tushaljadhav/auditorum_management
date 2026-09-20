@@ -1,24 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import { Download, X, Smartphone } from 'lucide-react';
+import { Download, X, Smartphone, CheckCircle2 } from 'lucide-react';
 
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showBanner, setShowBanner] = useState(false);
+  const [installedNotice, setInstalledNotice] = useState(false);
 
   useEffect(() => {
+    // If already in standalone mode, it's already installed and open!
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                         window.navigator.standalone === true ||
+                         document.referrer.includes('android-app://');
+
+    if (isStandalone) {
+      localStorage.setItem('kirti_pwa_installed', 'true');
+      return;
+    }
+
     const handler = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      const dismissed = localStorage.getItem('kirti_pwa_dismissed');
-      if (!dismissed) {
+
+      const params = new URLSearchParams(window.location.search);
+      const isAutoInstall = params.get('install') === '1';
+
+      if (isAutoInstall) {
         setShowBanner(true);
+        setTimeout(() => {
+          try {
+            e.prompt();
+          } catch (err) {}
+        }, 350);
+      } else {
+        const dismissed = localStorage.getItem('kirti_pwa_dismissed');
+        if (!dismissed) {
+          setShowBanner(true);
+        }
       }
     };
 
+    const handleInstalled = () => {
+      setShowBanner(false);
+      setInstalledNotice(true);
+      localStorage.setItem('kirti_pwa_installed', 'true');
+      setTimeout(() => setInstalledNotice(false), 4000);
+    };
+
     window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', handleInstalled);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', handleInstalled);
     };
   }, []);
 
@@ -28,6 +61,7 @@ export default function InstallPrompt() {
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
       setShowBanner(false);
+      localStorage.setItem('kirti_pwa_installed', 'true');
     }
     setDeferredPrompt(null);
   };
@@ -36,6 +70,29 @@ export default function InstallPrompt() {
     setShowBanner(false);
     localStorage.setItem('kirti_pwa_dismissed', 'true');
   };
+
+  if (installedNotice) {
+    return (
+      <div style={{
+        margin: '12px 16px 0',
+        padding: '12px 16px',
+        background: '#ECFDF5',
+        border: '1px solid #A7F3D0',
+        borderRadius: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        color: '#065F46',
+        fontSize: '13px',
+        fontWeight: '700',
+        boxShadow: '0 4px 16px rgba(16, 185, 129, 0.15)',
+        animation: 'fadeIn 0.25s ease'
+      }}>
+        <CheckCircle2 size={18} color="#10B981" />
+        <span>🎉 App Installed Successfully! You can now launch it anytime from your home screen.</span>
+      </div>
+    );
+  }
 
   if (!showBanner) return null;
 
@@ -83,13 +140,13 @@ export default function InstallPrompt() {
         <button
           onClick={handleInstall}
           style={{
-            background: 'var(--primary-gradient)',
+            background: 'linear-gradient(135deg, #4F46E5 0%, #6366F1 100%)',
             color: '#FFFFFF',
             border: 'none',
             borderRadius: '9999px',
-            padding: '7px 13px',
-            fontSize: '11px',
-            fontWeight: '700',
+            padding: '7px 14px',
+            fontSize: '12px',
+            fontWeight: '750',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',

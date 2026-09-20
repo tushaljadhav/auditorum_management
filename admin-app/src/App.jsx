@@ -56,8 +56,6 @@ export default function App() {
         onNavigate={handleTabChange}
       />
 
-      <InstallPrompt />
-
       <main key={refreshKey} style={{ flex: 1 }}>
         {activeTab === 'dashboard' && <Dashboard onNavigate={handleTabChange} />}
         {activeTab === 'venues' && <Venues />}

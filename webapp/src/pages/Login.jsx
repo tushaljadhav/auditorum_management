@@ -4,7 +4,8 @@ import { showCustomToast } from '../utils/toast';
 import {
   Phone, ArrowRight, Shield, Briefcase,
   LogOut, Calendar, AlertTriangle, UserPlus,
-  CheckCircle2, Home, MapPin, Clock, XCircle
+  CheckCircle2, Home, MapPin, Clock, XCircle,
+  AlertCircle, Check, Info
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════
@@ -163,10 +164,10 @@ export default function Login({ currentUser, onUserChange, onNavigate }) {
   const [errorState, setErrorState] = useState(null);
   const [mobileFocused, setMobileFocused] = useState(false);
 
-  const cleanMobile   = mobile.trim().replace(/[\s\-()]/g, '');
-  const digitsOnly    = cleanMobile.replace(/[^0-9]/g, '');
+  const cleanMobile   = mobile.trim();
   const isAdmin       = cleanMobile.toLowerCase() === 'admin';
-  const isValidMobile = digitsOnly.length >= 10 || isAdmin;
+  const digitsOnly    = cleanMobile.replace(/[^0-9]/g, '').slice(0, 10);
+  const isValidMobile = isAdmin || /^[6-9]\d{9}$/.test(digitsOnly);
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -175,8 +176,16 @@ export default function Login({ currentUser, onUserChange, onNavigate }) {
       setErrorState({ type: 'general', message: 'Please enter your mobile number.' });
       return;
     }
+    if (!isAdmin && digitsOnly.length < 10) {
+      setErrorState({ type: 'general', message: `Mobile number must be exactly 10 digits (currently ${digitsOnly.length}).` });
+      return;
+    }
+    if (!isAdmin && !/^[6-9]/.test(digitsOnly)) {
+      setErrorState({ type: 'general', message: 'Mobile number must start with 6, 7, 8, or 9.' });
+      return;
+    }
     if (!isValidMobile) {
-      setErrorState({ type: 'general', message: 'Enter a valid 10-digit mobile number.' });
+      setErrorState({ type: 'general', message: 'Enter a valid 10-digit Indian mobile number.' });
       return;
     }
 
@@ -491,17 +500,30 @@ export default function Login({ currentUser, onUserChange, onNavigate }) {
                   </div>
                   <input
                     type="tel" inputMode="numeric" autoFocus autoComplete="tel"
-                    placeholder="Mobile number"
+                    placeholder="10-digit mobile number"
+                    maxLength={10}
                     value={mobile}
                     onFocus={()=>setMobileFocused(true)}
                     onBlur={()=>setMobileFocused(false)}
-                    onChange={e=>setMobile(e.target.value)}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val.toLowerCase().startsWith('adm')) {
+                        setMobile(val.slice(0, 10));
+                      } else {
+                        setMobile(val.replace(/[^0-9]/g, '').slice(0, 10));
+                      }
+                    }}
                     style={{
                       background:'transparent', border:'none', outline:'none',
                       color:'#0F172A', fontSize:15, fontWeight:600,
                       width:'100%', fontFamily:'inherit',
                     }}
                   />
+                  {!isAdmin && digitsOnly.length > 0 && digitsOnly.length < 10 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', flexShrink: 0 }}>
+                      {digitsOnly.length}/10
+                    </span>
+                  )}
                   {isValidMobile && (
                     <div style={{
                       width:22, height:22, borderRadius:'50%',
@@ -512,6 +534,24 @@ export default function Login({ currentUser, onUserChange, onNavigate }) {
                     </div>
                   )}
                 </div>
+                {!isAdmin && digitsOnly.length > 0 && !/^[6-9]/.test(digitsOnly) && (
+                  <div className="app-alert-error">
+                    <AlertCircle size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                    <span>Must start with 6, 7, 8, or 9 (Indian number)</span>
+                  </div>
+                )}
+                {!isAdmin && digitsOnly.length > 0 && digitsOnly.length < 10 && /^[6-9]/.test(digitsOnly) && (
+                  <div className="app-alert-info">
+                    <Info size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
+                    <span>Enter full 10 digits ({digitsOnly.length}/10)</span>
+                  </div>
+                )}
+                {!isAdmin && isValidMobile && (
+                  <div className="app-alert-success">
+                    <Check size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                    <span>Valid 10-digit mobile number</span>
+                  </div>
+                )}
               </div>
 
 
@@ -628,6 +668,16 @@ export default function Login({ currentUser, onUserChange, onNavigate }) {
         @keyframes shimmer {
           0%   { transform: translateX(-100%); }
           100% { transform: translateX(200%); }
+        }
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+          box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+          -webkit-text-fill-color: #0F172A !important;
+          caret-color: #0F172A !important;
+          transition: background-color 5000000s ease-in-out 0s !important;
         }
       `}</style>
     </div>

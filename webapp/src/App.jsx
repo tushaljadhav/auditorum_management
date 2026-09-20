@@ -3,6 +3,7 @@ import { sessionManager } from './api/client';
 import Splash from './pages/Splash';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
+import InstallPrompt from './components/InstallPrompt';
 
 import Home from './pages/Home';
 import Attendance from './pages/Attendance';
@@ -70,6 +71,8 @@ export default function App() {
           onBrandClick={() => handleNavigate('home')}
         />
       )}
+      
+      <InstallPrompt />
 
       {/* Page Content */}
       <main style={{ flex: 1, overflowX: 'hidden' }}>

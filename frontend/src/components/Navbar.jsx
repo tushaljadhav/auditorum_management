@@ -22,8 +22,20 @@ export default function Navbar({ activePage = 'Home' }) {
       background: 'rgba(255, 255, 255, 0.95)',
       backdropFilter: 'blur(12px)',
       borderBottom: '1px solid #E2E8F0',
-      padding: '12px 20px',
+      padding: '12px 16px',
+      maxWidth: '100vw',
+      overflowX: 'hidden'
     }}>
+      <style>{`
+        @media (max-width: 991px) {
+          .nav-links, .nav-actions {
+            display: none !important;
+          }
+          .hamburger-btn {
+            display: flex !important;
+          }
+        }
+      `}</style>
       <div style={{
         maxWidth: '1200px',
         margin: '0 auto',

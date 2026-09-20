@@ -4,7 +4,7 @@ import { showCustomToast } from '../utils/toast';
 import {
   ArrowLeft, User, Phone, Mail, Building2,
   Briefcase, GraduationCap, ArrowRight, CheckCircle2,
-  Home, MapPin, Clock, LogIn
+  Home, MapPin, Clock, LogIn, AlertCircle, Check, Info
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════
@@ -162,29 +162,35 @@ export default function Register({ onNavigate, onUserChange }) {
 
   const update = (f, v) => setForm(p => ({ ...p, [f]: v }));
 
-  const digits = form.mobile.replace(/[^0-9]/g, '');
+  const digits = form.mobile.replace(/[^0-9]/g, '').slice(0, 10);
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const isEmailValid = emailRegex.test(form.email.trim());
+  const isMobileValid = /^[6-9]\d{9}$/.test(digits);
   const isValid = form.firstName.trim().length >= 2 &&
                   form.lastName.trim().length >= 2 &&
-                  digits.length >= 10 &&
+                  isMobileValid &&
                   isEmailValid;
 
   const handleRegister = async (e) => {
     if (e) e.preventDefault();
-    if (!isValid) {
-      if (!form.firstName.trim() || !form.lastName.trim()) {
-        showCustomToast('Required Field', 'Please enter both First Name and Last Name.', 'warning');
-        return;
-      }
-      if (!isEmailValid) {
-        showCustomToast('Email Compulsory', 'Please enter a valid email address (e.g. name@kirti.ac.in).', 'warning');
-        return;
-      }
-      if (digits.length < 10) {
-        showCustomToast('Mobile Required', 'Please enter a valid 10-digit mobile number.', 'warning');
-        return;
-      }
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      showCustomToast('Name Required', 'Please enter both First Name and Last Name.', 'warning');
+      return;
+    }
+    if (!digits) {
+      showCustomToast('Mobile Required', 'Please enter your 10-digit mobile number.', 'warning');
+      return;
+    }
+    if (!/^[6-9]/.test(digits)) {
+      showCustomToast('Invalid Mobile Number', 'Mobile number must start with 6, 7, 8, or 9.', 'warning');
+      return;
+    }
+    if (digits.length < 10) {
+      showCustomToast('Mobile Incomplete', `Mobile number must be exactly 10 digits (currently ${digits.length}/10).`, 'warning');
+      return;
+    }
+    if (!isEmailValid) {
+      showCustomToast('Email Invalid', 'Please enter a valid email address (e.g. name@college.edu).', 'warning');
       return;
     }
 
@@ -317,9 +323,10 @@ export default function Register({ onNavigate, onUserChange }) {
   /* ── MAIN REGISTRATION FORM ── */
   return (
     <div style={{
-      minHeight: '100vh', width: '100%',
+      height: '100dvh', maxHeight: '100dvh', width: '100%',
       background: '#FAFBFF',
       display: 'flex', flexDirection: 'column',
+      justifyContent: 'space-between',
       fontFamily: "'Inter','Plus Jakarta Sans',-apple-system,sans-serif",
       position: 'relative', overflow: 'hidden',
       boxSizing: 'border-box',
@@ -357,44 +364,45 @@ export default function Register({ onNavigate, onUserChange }) {
 
       {/* ══ Top Bar: Back button ══ */}
       <div style={{
-        padding: '16px 20px 0',
+        padding: '10px 18px 0',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'relative', zIndex: 3,
+        flexShrink: 0,
       }}>
         <button
           type="button"
           onClick={() => onNavigate?.('login')}
           style={{
-            width: 38, height: 38, borderRadius: 12,
+            width: 34, height: 34, borderRadius: 10,
             background: '#FFFFFF',
             border: '1.5px solid #E2E8F0',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#334155', cursor: 'pointer',
-            boxShadow: '0 2px 6px rgba(15,23,42,0.06)',
+            boxShadow: '0 1px 4px rgba(15,23,42,0.05)',
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = '#C7D2FE'; e.currentTarget.style.background = '#EEF2FF'; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.background = '#FFFFFF'; }}
         >
-          <ArrowLeft size={17} />
+          <ArrowLeft size={16} />
         </button>
       </div>
 
       {/* ══ Branding Header ══ */}
-      <div style={{ textAlign: 'center', padding: '12px 28px 0', position: 'relative', zIndex: 2 }}>
+      <div style={{ textAlign: 'center', padding: '2px 20px 0', position: 'relative', zIndex: 2, flexShrink: 0 }}>
         {/* Logo with glow ring */}
-        <div style={{ display: 'inline-block', position: 'relative', marginBottom: 14 }}>
+        <div style={{ display: 'inline-block', position: 'relative', marginBottom: 8 }}>
           <div style={{
-            position: 'absolute', inset: -8, borderRadius: 28,
+            position: 'absolute', inset: -6, borderRadius: 20,
             background: 'linear-gradient(135deg, #E0E7FF, #EDE9FE)',
             zIndex: 0,
           }}/>
           <div style={{
             position: 'relative', zIndex: 1,
-            width: 70, height: 70, borderRadius: 20,
+            width: 50, height: 50, borderRadius: 16,
             background: '#FFFFFF',
-            boxShadow: '0 4px 16px rgba(79,70,229,0.18), 0 1px 4px rgba(79,70,229,0.1)',
-            padding: 8,
+            boxShadow: '0 4px 14px rgba(79,70,229,0.16)',
+            padding: 6,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <img src="/Logo.png" alt="Kirti" style={{ width: '100%', height: '100%', objectFit: 'contain' }}/>
@@ -403,9 +411,9 @@ export default function Register({ onNavigate, onUserChange }) {
 
         {/* App name */}
         <div style={{
-          fontSize: 32, fontWeight: 900,
-          letterSpacing: '-1px', lineHeight: 1,
-          marginBottom: 6,
+          fontSize: 25, fontWeight: 900,
+          letterSpacing: '-0.7px', lineHeight: 1,
+          marginBottom: 3,
         }}>
           <span style={{ color: '#0F172A' }}>Kirti</span>
           <span style={{
@@ -416,61 +424,61 @@ export default function Register({ onNavigate, onUserChange }) {
 
         {/* College subtitle */}
         <div style={{
-          fontSize: 10, fontWeight: 800, color: '#94A3B8',
-          letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 8,
+          fontSize: 9.5, fontWeight: 800, color: '#94A3B8',
+          letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 6,
         }}>
           Kirti M. Doongursee College
         </div>
 
         {/* Tagline pill */}
         <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
+          display: 'inline-flex', alignItems: 'center', gap: 5,
           background: '#EEF2FF', border: '1px solid #C7D2FE',
-          borderRadius: 999, padding: '5px 14px',
-          fontSize: 11, fontWeight: 700, color: '#4F46E5',
+          borderRadius: 999, padding: '3px 11px',
+          fontSize: 10.5, fontWeight: 700, color: '#4F46E5',
         }}>
-          <GraduationCap size={13} />
+          <GraduationCap size={12} />
           <span>Faculty Registration</span>
         </div>
       </div>
 
       {/* ══ Form Card ══ */}
-      <div style={{ padding: '24px 24px 0', position: 'relative', zIndex: 2 }}>
-        <div style={{ marginBottom: 20 }}>
+      <div style={{ padding: '6px 22px 0', position: 'relative', zIndex: 2, flex: '1 1 auto', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div style={{ marginBottom: 10, textAlign: 'center' }}>
           <div style={{
-            fontSize: 24, fontWeight: 900, color: '#0F172A',
-            letterSpacing: '-0.5px', lineHeight: 1.25, marginBottom: 4,
+            fontSize: 19, fontWeight: 900, color: '#0F172A',
+            letterSpacing: '-0.4px', lineHeight: 1.2, marginBottom: 2,
           }}>
             Create Account 📝
           </div>
-          <div style={{ fontSize: 13, color: '#64748B', fontWeight: 500, lineHeight: 1.5 }}>
-            Your mobile number will be your direct Login ID (no password required).
+          <div style={{ fontSize: 11.5, color: '#64748B', fontWeight: 500, lineHeight: 1.35 }}>
+            Mobile number will be your direct Login ID (no password required).
           </div>
         </div>
 
-        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+        <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 
           {/* First Name and Last Name Fields (Separated) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
             {/* First Name */}
             <div>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
+                display: 'flex', alignItems: 'center', gap: 8,
                 background: '#FFFFFF',
                 border: `1.5px solid ${focusedField === 'firstName' ? '#4F46E5' : '#E2E8F0'}`,
-                borderRadius: 14, padding: '13px 12px',
+                borderRadius: 12, padding: '9px 11px',
                 boxShadow: focusedField === 'firstName'
-                  ? '0 0 0 4px rgba(79,70,229,0.1), 0 2px 8px rgba(79,70,229,0.08)'
-                  : '0 2px 6px rgba(15,23,42,0.05)',
+                  ? '0 0 0 3px rgba(79,70,229,0.1)'
+                  : '0 1px 3px rgba(15,23,42,0.04)',
                 transition: 'all 0.2s ease',
               }}>
                 <div style={{
-                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                  width: 24, height: 24, borderRadius: 7, flexShrink: 0,
                   background: focusedField === 'firstName' ? '#EEF2FF' : '#F8FAFC',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'background 0.2s',
                 }}>
-                  <User size={14} color={focusedField === 'firstName' ? '#4F46E5' : '#94A3B8'}/>
+                  <User size={13} color={focusedField === 'firstName' ? '#4F46E5' : '#94A3B8'}/>
                 </div>
                 <input
                   type="text"
@@ -481,7 +489,7 @@ export default function Register({ onNavigate, onUserChange }) {
                   onChange={e => update('firstName', e.target.value)}
                   style={{
                     background: 'transparent', border: 'none', outline: 'none',
-                    color: '#0F172A', fontSize: 13.5, fontWeight: 600,
+                    color: '#0F172A', fontSize: 13, fontWeight: 600,
                     width: '100%', fontFamily: 'inherit',
                   }}
                 />
@@ -494,22 +502,22 @@ export default function Register({ onNavigate, onUserChange }) {
             {/* Last Name */}
             <div>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
+                display: 'flex', alignItems: 'center', gap: 8,
                 background: '#FFFFFF',
                 border: `1.5px solid ${focusedField === 'lastName' ? '#4F46E5' : '#E2E8F0'}`,
-                borderRadius: 14, padding: '13px 12px',
+                borderRadius: 12, padding: '9px 11px',
                 boxShadow: focusedField === 'lastName'
-                  ? '0 0 0 4px rgba(79,70,229,0.1), 0 2px 8px rgba(79,70,229,0.08)'
-                  : '0 2px 6px rgba(15,23,42,0.05)',
+                  ? '0 0 0 3px rgba(79,70,229,0.1)'
+                  : '0 1px 3px rgba(15,23,42,0.04)',
                 transition: 'all 0.2s ease',
               }}>
                 <div style={{
-                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                  width: 24, height: 24, borderRadius: 7, flexShrink: 0,
                   background: focusedField === 'lastName' ? '#EEF2FF' : '#F8FAFC',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'background 0.2s',
                 }}>
-                  <User size={14} color={focusedField === 'lastName' ? '#4F46E5' : '#94A3B8'}/>
+                  <User size={13} color={focusedField === 'lastName' ? '#4F46E5' : '#94A3B8'}/>
                 </div>
                 <input
                   type="text"
@@ -520,7 +528,7 @@ export default function Register({ onNavigate, onUserChange }) {
                   onChange={e => update('lastName', e.target.value)}
                   style={{
                     background: 'transparent', border: 'none', outline: 'none',
-                    color: '#0F172A', fontSize: 13.5, fontWeight: 600,
+                    color: '#0F172A', fontSize: 13, fontWeight: 600,
                     width: '100%', fontFamily: 'inherit',
                   }}
                 />
@@ -534,126 +542,163 @@ export default function Register({ onNavigate, onUserChange }) {
           {/* Mobile Number */}
           <div>
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
+              display: 'flex', alignItems: 'center', gap: 10,
               background: '#FFFFFF',
-              border: `1.5px solid ${focusedField === 'mobile' ? '#4F46E5' : '#E2E8F0'}`,
-              borderRadius: 14, padding: '13px 15px',
+              border: `1.5px solid ${
+                focusedField === 'mobile'
+                  ? '#4F46E5'
+                  : (digits.length > 0 && !/^[6-9]/.test(digits) ? '#EF4444' : '#E2E8F0')
+              }`,
+              borderRadius: 12, padding: '9px 13px',
               boxShadow: focusedField === 'mobile'
-                ? '0 0 0 4px rgba(79,70,229,0.1), 0 2px 8px rgba(79,70,229,0.08)'
-                : '0 2px 6px rgba(15,23,42,0.05)',
+                ? '0 0 0 3px rgba(79,70,229,0.1)'
+                : (digits.length > 0 && !/^[6-9]/.test(digits) ? '0 0 0 3px rgba(239,68,68,0.1)' : '0 1px 3px rgba(15,23,42,0.04)'),
               transition: 'all 0.2s ease',
             }}>
               <div style={{
-                width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-                background: focusedField === 'mobile' ? '#EEF2FF' : '#F8FAFC',
+                width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                background: focusedField === 'mobile' ? '#EEF2FF' : (digits.length > 0 && !/^[6-9]/.test(digits) ? '#FEE2E2' : '#F8FAFC'),
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'background 0.2s',
               }}>
-                <Phone size={15} color={focusedField === 'mobile' ? '#4F46E5' : '#94A3B8'}/>
+                <Phone size={13} color={focusedField === 'mobile' ? '#4F46E5' : (digits.length > 0 && !/^[6-9]/.test(digits) ? '#EF4444' : '#94A3B8')}/>
               </div>
               <input
                 type="tel"
                 inputMode="numeric"
-                placeholder="10-digit Mobile number *"
+                maxLength={10}
+                placeholder="10-digit Mobile number"
                 value={form.mobile}
                 onFocus={() => setFocusedField('mobile')}
                 onBlur={() => setFocusedField(null)}
-                onChange={e => update('mobile', e.target.value)}
+                onChange={e => update('mobile', e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
                 style={{
                   background: 'transparent', border: 'none', outline: 'none',
-                  color: '#0F172A', fontSize: 14, fontWeight: 600,
+                  color: '#0F172A', fontSize: 13.5, fontWeight: 600,
                   width: '100%', fontFamily: 'inherit',
                 }}
               />
-              {digits.length >= 10 && (
+              {digits.length > 0 && digits.length < 10 && /^[6-9]/.test(digits) && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', flexShrink: 0 }}>
+                  {digits.length}/10
+                </span>
+              )}
+              {isMobileValid && (
                 <div style={{
-                  width: 22, height: 22, borderRadius: '50%',
+                  width: 20, height: 20, borderRadius: '50%',
                   background: '#ECFDF5', border: '1px solid #BBF7D0',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
-                  <CheckCircle2 size={13} color="#10B981"/>
+                  <CheckCircle2 size={12} color="#10B981"/>
                 </div>
               )}
             </div>
+            {digits.length > 0 && !/^[6-9]/.test(digits) && (
+              <div className="app-alert-error">
+                <AlertCircle size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                <span>Must start with 6, 7, 8, or 9 (Indian number)</span>
+              </div>
+            )}
+            {digits.length > 0 && digits.length < 10 && /^[6-9]/.test(digits) && (
+              <div className="app-alert-info">
+                <Info size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
+                <span>Enter full 10 digits ({digits.length}/10)</span>
+              </div>
+            )}
+            {isMobileValid && (
+              <div className="app-alert-success">
+                <Check size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                <span>Valid 10-digit mobile number</span>
+              </div>
+            )}
           </div>
 
-          {/* Email Address (Compulsory) */}
+          {/* Email Address */}
           <div>
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
+              display: 'flex', alignItems: 'center', gap: 10,
               background: '#FFFFFF',
               border: `1.5px solid ${
                 focusedField === 'email'
                   ? '#4F46E5'
                   : (form.email && !isEmailValid ? '#EF4444' : '#E2E8F0')
               }`,
-              borderRadius: 14, padding: '13px 15px',
+              borderRadius: 12, padding: '9px 13px',
               boxShadow: focusedField === 'email'
-                ? '0 0 0 4px rgba(79,70,229,0.1), 0 2px 8px rgba(79,70,229,0.08)'
-                : '0 2px 6px rgba(15,23,42,0.05)',
+                ? '0 0 0 3px rgba(79,70,229,0.1)'
+                : (form.email && !isEmailValid ? '0 0 0 3px rgba(239,68,68,0.1)' : '0 1px 3px rgba(15,23,42,0.04)'),
               transition: 'all 0.2s ease',
             }}>
               <div style={{
-                width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-                background: focusedField === 'email' ? '#EEF2FF' : '#F8FAFC',
+                width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                background: focusedField === 'email' ? '#EEF2FF' : (form.email && !isEmailValid ? '#FEE2E2' : '#F8FAFC'),
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'background 0.2s',
               }}>
-                <Mail size={15} color={focusedField === 'email' ? '#4F46E5' : '#94A3B8'}/>
+                <Mail size={13} color={focusedField === 'email' ? '#4F46E5' : (form.email && !isEmailValid ? '#EF4444' : '#94A3B8')}/>
               </div>
               <input
                 type="email"
                 required
-                placeholder="Email Address *"
+                placeholder="Email Address"
                 value={form.email}
                 onFocus={() => setFocusedField('email')}
                 onBlur={() => setFocusedField(null)}
                 onChange={e => update('email', e.target.value)}
                 style={{
                   background: 'transparent', border: 'none', outline: 'none',
-                  color: '#0F172A', fontSize: 14, fontWeight: 600,
+                  color: '#0F172A', fontSize: 13.5, fontWeight: 600,
                   width: '100%', fontFamily: 'inherit',
                 }}
               />
               {isEmailValid && (
                 <div style={{
-                  width: 22, height: 22, borderRadius: '50%',
+                  width: 20, height: 20, borderRadius: '50%',
                   background: '#ECFDF5', border: '1px solid #BBF7D0',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                 }}>
-                  <CheckCircle2 size={13} color="#10B981"/>
+                  <CheckCircle2 size={12} color="#10B981"/>
                 </div>
               )}
             </div>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between',
-              fontSize: 11, color: form.email && !isEmailValid ? '#EF4444' : '#64748B',
-              marginTop: 4, paddingLeft: 4, fontWeight: 500
-            }}>
-              <span>{form.email && !isEmailValid ? 'Please enter a valid email format' : 'Email address required for verification'}</span>
-              <span style={{ color: '#E11D48', fontWeight: 700 }}>* Compulsory</span>
-            </div>
+            {form.email.length > 0 && !isEmailValid && (
+              <div className="app-alert-error">
+                <AlertCircle size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                <span>Enter a valid email (e.g. name@college.edu)</span>
+              </div>
+            )}
+            {isEmailValid && (
+              <div className="app-alert-success">
+                <Check size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                <span>Valid email address</span>
+              </div>
+            )}
+            {form.email.length === 0 && (
+              <div className="app-alert-info">
+                <Info size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
+                <span>Required for account verification</span>
+              </div>
+            )}
           </div>
-
-
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={submitting || !isValid}
+            disabled={submitting}
             style={{
-              marginTop: 6,
-              width: '100%', height: 52, borderRadius: 14, border: 'none',
+              marginTop: 3,
+              width: '100%', height: 44, borderRadius: 12, border: 'none',
               background: isValid
                 ? 'linear-gradient(100deg, #4F46E5 0%, #6D28D9 100%)'
-                : '#F1F5F9',
-              color: isValid ? '#FFFFFF' : '#CBD5E1',
-              fontSize: 15, fontWeight: 800,
-              cursor: isValid ? 'pointer' : 'not-allowed',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+                : 'linear-gradient(100deg, #6366F1 0%, #8B5CF6 100%)',
+              color: '#FFFFFF',
+              fontSize: 14, fontWeight: 800,
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              opacity: isValid ? 1 : 0.75,
               boxShadow: isValid
-                ? '0 4px 6px rgba(79,70,229,0.2), 0 12px 28px rgba(79,70,229,0.3)'
-                : 'none',
+                ? '0 3px 12px rgba(79,70,229,0.28)'
+                : '0 2px 8px rgba(99,102,241,0.18)',
               transition: 'all 0.25s ease',
               position: 'relative', overflow: 'hidden',
             }}
@@ -665,18 +710,18 @@ export default function Register({ onNavigate, onUserChange }) {
                 animation: 'regShimmer 2.5s ease infinite',
               }}/>
             )}
-            <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 7 }}>
               {submitting
-                ? <><span style={{ width: 17, height: 17, border: '2.5px solid rgba(255,255,255,0.3)', borderTopColor: '#FFF', borderRadius: '50%', display: 'inline-block', animation: 'regSpin 0.75s linear infinite' }}/> Registering…</>
-                : <><GraduationCap size={17}/> Register &amp; Login <ArrowRight size={16} strokeWidth={2.5}/></>
+                ? <><span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#FFF', borderRadius: '50%', display: 'inline-block', animation: 'regSpin 0.75s linear infinite' }}/> Registering…</>
+                : <><GraduationCap size={15}/> Register &amp; Login <ArrowRight size={14} strokeWidth={2.5}/></>
               }
             </span>
           </button>
 
           {/* OR divider */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '2px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '1px 0' }}>
             <div style={{ flex: 1, height: 1, background: '#E2E8F0' }}/>
-            <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, letterSpacing: 1 }}>OR</span>
+            <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, letterSpacing: 0.8 }}>OR</span>
             <div style={{ flex: 1, height: 1, background: '#E2E8F0' }}/>
           </div>
 
@@ -685,13 +730,13 @@ export default function Register({ onNavigate, onUserChange }) {
             type="button"
             onClick={() => onNavigate?.('login')}
             style={{
-              width: '100%', height: 48, borderRadius: 14,
+              width: '100%', height: 40, borderRadius: 12,
               background: '#FFFFFF',
               border: '1.5px solid #C7D2FE',
-              color: '#4F46E5', fontSize: 14, fontWeight: 700,
+              color: '#4F46E5', fontSize: 13, fontWeight: 700,
               cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              boxShadow: '0 2px 8px rgba(79,70,229,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              boxShadow: '0 1px 4px rgba(79,70,229,0.06)',
               transition: 'all 0.18s ease',
             }}
             onMouseEnter={e => { e.currentTarget.style.background = '#EEF2FF'; e.currentTarget.style.borderColor = '#A5B4FC'; }}
@@ -704,9 +749,9 @@ export default function Register({ onNavigate, onUserChange }) {
 
         {/* Location */}
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-          margin: '18px 0 0',
-          fontSize: 11, color: '#94A3B8', fontWeight: 600,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          margin: '6px 0 0',
+          fontSize: 10.5, color: '#94A3B8', fontWeight: 600,
         }}>
           <MapPin size={11} color="#10B981"/>
           Kirti M. Doongursee College, Dadar (W)
@@ -714,25 +759,25 @@ export default function Register({ onNavigate, onUserChange }) {
       </div>
 
       {/* ══ Building + Script (matching Login) ══ */}
-      <div style={{ position: 'relative', marginTop: 'auto', paddingTop: 16 }}>
+      <div style={{ position: 'relative', marginTop: 'auto', maxHeight: 82, overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'flex-end' }}>
         <BuildingIllustration/>
 
         {/* "Learn Grow Excel" — elegant cursive */}
         <div style={{
-          position: 'absolute', bottom: 22, right: 20,
-          textAlign: 'right', lineHeight: 1.35,
+          position: 'absolute', bottom: 12, right: 16,
+          textAlign: 'right', lineHeight: 1.25,
           pointerEvents: 'none',
         }}>
           {['Learn','Grow','Excel'].map((word, i) => (
             <div key={word} style={{
               fontFamily: "'Segoe Script','Brush Script MT',cursive",
-              fontSize: i === 1 ? 17 : 14,
+              fontSize: i === 1 ? 15 : 12.5,
               fontWeight: 700,
               fontStyle: 'italic',
               color: '#4F46E5',
               opacity: 0.55 + i * 0.1,
               textShadow: '0 1px 3px rgba(79,70,229,0.15)',
-              marginBottom: 1,
+              marginBottom: 0,
             }}>
               {word}
             </div>
@@ -745,6 +790,16 @@ export default function Register({ onNavigate, onUserChange }) {
         @keyframes regShimmer {
           0%   { transform: translateX(-100%); }
           100% { transform: translateX(200%); }
+        }
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+          box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+          -webkit-text-fill-color: #0F172A !important;
+          caret-color: #0F172A !important;
+          transition: background-color 5000000s ease-in-out 0s !important;
         }
       `}</style>
     </div>

@@ -11,11 +11,13 @@ export default function Footer() {
 
   return (
     <footer style={{
-      padding: '64px 24px 40px',
+      padding: '40px 16px 30px',
       background: '#FFFFFF',
       borderTop: '1px solid #EAEAEA',
       position: 'relative',
-      zIndex: 2
+      zIndex: 2,
+      maxWidth: '100vw',
+      overflowX: 'hidden'
     }}>
       <div style={{
         maxWidth: '1200px',
