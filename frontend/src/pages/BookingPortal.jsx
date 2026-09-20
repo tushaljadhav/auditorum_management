@@ -15,10 +15,17 @@ export default function BookingPortal() {
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileQr, setShowMobileQr] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const isLocalEnv = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  const defaultFacultyUrl = isLocalEnv 
+    ? 'http://localhost:3001' 
+    : 'https://auditorium-faculty.vercel.app';
+
   const [networkInfo, setNetworkInfo] = useState({
-    lanIp: 'localhost',
-    localUrl: 'http://localhost:3001',
-    lanUrl: 'http://localhost:3001'
+    lanIp: isLocalEnv ? 'localhost' : 'auditorium-faculty.vercel.app',
+    localUrl: defaultFacultyUrl,
+    lanUrl: defaultFacultyUrl
   });
 
   useEffect(() => {
@@ -61,24 +68,30 @@ export default function BookingPortal() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Fetch dynamic live LAN IP from backend
-    fetch('/api/system/network-info')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.lanUrl) {
-          setNetworkInfo(data);
-        }
-      })
-      .catch(() => {
-        const host = window.location.hostname || 'localhost';
-        if (host !== 'localhost' && host !== '127.0.0.1') {
+    if (!isLocalEnv) {
+      setNetworkInfo({
+        lanIp: 'auditorium-faculty.vercel.app',
+        localUrl: 'https://auditorium-faculty.vercel.app',
+        lanUrl: 'https://auditorium-faculty.vercel.app'
+      });
+    } else {
+      // Fetch dynamic live LAN IP from backend for local dev
+      fetch('/api/system/network-info')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.lanUrl) {
+            setNetworkInfo(data);
+          }
+        })
+        .catch(() => {
+          const host = window.location.hostname || 'localhost';
           setNetworkInfo({
             lanIp: host,
             localUrl: 'http://localhost:3001',
             lanUrl: `http://${host}:3001`
           });
-        }
-      });
+        });
+    }
 
     return () => {
       window.removeEventListener('resize', checkMobile);

@@ -15,10 +15,17 @@ export default function AdminAccessPortal() {
   const [isMobile, setIsMobile] = useState(false);
   const [showMobileQr, setShowMobileQr] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const isLocalEnv = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+  const defaultAdminUrl = isLocalEnv 
+    ? 'http://localhost:3002' 
+    : 'https://auditorium-admin.vercel.app';
+
   const [networkInfo, setNetworkInfo] = useState({
-    lanIp: 'localhost',
-    localUrl: 'http://localhost:3002',
-    lanUrl: 'http://localhost:3002'
+    lanIp: isLocalEnv ? 'localhost' : 'auditorium-admin.vercel.app',
+    localUrl: defaultAdminUrl,
+    lanUrl: defaultAdminUrl
   });
 
   useEffect(() => {
@@ -61,28 +68,34 @@ export default function AdminAccessPortal() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Fetch dynamic live LAN IP from backend
-    fetch('/api/system/network-info')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.lanIp) {
-          setNetworkInfo({
-            lanIp: data.lanIp,
-            localUrl: 'http://localhost:3002',
-            lanUrl: `http://${data.lanIp}:3002`
-          });
-        }
-      })
-      .catch(() => {
-        const host = window.location.hostname || 'localhost';
-        if (host !== 'localhost' && host !== '127.0.0.1') {
+    if (!isLocalEnv) {
+      setNetworkInfo({
+        lanIp: 'auditorium-admin.vercel.app',
+        localUrl: 'https://auditorium-admin.vercel.app',
+        lanUrl: 'https://auditorium-admin.vercel.app'
+      });
+    } else {
+      // Fetch dynamic live LAN IP from backend
+      fetch('/api/system/network-info')
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.lanIp) {
+            setNetworkInfo({
+              lanIp: data.lanIp,
+              localUrl: 'http://localhost:3002',
+              lanUrl: `http://${data.lanIp}:3002`
+            });
+          }
+        })
+        .catch(() => {
+          const host = window.location.hostname || 'localhost';
           setNetworkInfo({
             lanIp: host,
             localUrl: 'http://localhost:3002',
             lanUrl: `http://${host}:3002`
           });
-        }
-      });
+        });
+    }
 
     return () => {
       window.removeEventListener('resize', checkMobile);

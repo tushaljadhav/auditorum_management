@@ -10,10 +10,10 @@ import {
 export default function BookingPortal() {
   const navigate = useNavigate();
 
-  // URL of the User PWA (port 3001 in dev)
-  const appUrl = window.location.hostname === 'localhost'
+  // URL of the User PWA
+  const appUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:3001'
-    : '/app';
+    : 'https://auditorium-faculty.vercel.app';
 
   return (
     <div style={{
