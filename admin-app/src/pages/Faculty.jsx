@@ -361,7 +361,7 @@ export default function Faculty() {
                         {item.name}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                        {item.designationName || 'Faculty'} • Kirti College
+                        {item.departmentName ? `${item.departmentName} • ` : ''}Kirti College
                       </div>
                     </div>
                   </div>

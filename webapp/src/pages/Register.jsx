@@ -169,7 +169,8 @@ export default function Register({ onNavigate, onUserChange }) {
   const isValid = form.firstName.trim().length >= 2 &&
                   form.lastName.trim().length >= 2 &&
                   isMobileValid &&
-                  isEmailValid;
+                  isEmailValid &&
+                  form.department.trim().length >= 2;
 
   const handleRegister = async (e) => {
     if (e) e.preventDefault();
@@ -193,6 +194,10 @@ export default function Register({ onNavigate, onUserChange }) {
       showCustomToast('Email Invalid', 'Please enter a valid email address (e.g. name@college.edu).', 'warning');
       return;
     }
+    if (!form.department.trim()) {
+      showCustomToast('Department Required', 'Please enter or select your Department Name.', 'warning');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -203,7 +208,7 @@ export default function Register({ onNavigate, onUserChange }) {
         name: fullName,
         mobile: digits.slice(-10),
         email: form.email.trim(),
-        department: form.department.trim() || 'General',
+        department: form.department.trim(),
         designation: form.designation.trim() || 'Faculty'
       });
       // Do NOT set active user session! User must wait for Admin approval.
@@ -323,12 +328,12 @@ export default function Register({ onNavigate, onUserChange }) {
   /* ── MAIN REGISTRATION FORM ── */
   return (
     <div style={{
-      height: '100dvh', maxHeight: '100dvh', width: '100%',
+      minHeight: '100dvh', width: '100%',
       background: '#FAFBFF',
       display: 'flex', flexDirection: 'column',
       justifyContent: 'space-between',
       fontFamily: "'Inter','Plus Jakarta Sans',-apple-system,sans-serif",
-      position: 'relative', overflow: 'hidden',
+      position: 'relative', overflowY: 'auto', overflowX: 'hidden',
       boxSizing: 'border-box',
     }}>
 
@@ -679,6 +684,66 @@ export default function Register({ onNavigate, onUserChange }) {
                 <span>Required for account verification</span>
               </div>
             )}
+          </div>
+
+          {/* Department Name */}
+          <div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: '#FFFFFF',
+              border: `1.5px solid ${
+                focusedField === 'department' ? '#4F46E5' : '#E2E8F0'
+              }`,
+              borderRadius: 12, padding: '9px 13px',
+              boxShadow: focusedField === 'department'
+                ? '0 0 0 3px rgba(79,70,229,0.1)'
+                : '0 1px 3px rgba(15,23,42,0.04)',
+              transition: 'all 0.2s ease',
+            }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                background: focusedField === 'department' ? '#EEF2FF' : '#F8FAFC',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.2s',
+              }}>
+                <Building2 size={13} color={focusedField === 'department' ? '#4F46E5' : '#94A3B8'}/>
+              </div>
+              <input
+                type="text"
+                list="department-options"
+                required
+                placeholder="Department (e.g. Information Technology)"
+                value={form.department}
+                onFocus={() => setFocusedField('department')}
+                onBlur={() => setFocusedField(null)}
+                onChange={e => update('department', e.target.value)}
+                style={{
+                  background: 'transparent', border: 'none', outline: 'none',
+                  color: '#0F172A', fontSize: 13.5, fontWeight: 600,
+                  width: '100%', fontFamily: 'inherit',
+                }}
+              />
+              <datalist id="department-options">
+                <option value="Information Technology" />
+                <option value="Computer Science" />
+                <option value="Commerce" />
+                <option value="Arts" />
+                <option value="Science" />
+                <option value="Management Studies (BMS)" />
+                <option value="Mass Media (BAMMC)" />
+                <option value="Biotechnology" />
+                <option value="Chemistry" />
+              </datalist>
+              {form.department.trim().length >= 2 && (
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%',
+                  background: '#ECFDF5', border: '1px solid #BBF7D0',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <CheckCircle2 size={12} color="#10B981"/>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Submit Button */}

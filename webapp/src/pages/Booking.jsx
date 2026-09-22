@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api, getCachedVenues, getCachedDepartments } from '../api/client';
+import { api, sessionManager, getCachedVenues, getCachedDepartments } from '../api/client';
 import { showCustomToast } from '../utils/toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { downloadOfficialReceiptPDF } from '../utils/pdfHeader';
@@ -592,24 +592,36 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
 }
 
 /* ── Step 2: Booking Form ── */
-function StepForm({ slotData, onNext, onBack, currentUser }) {
+function StepForm({ slotData, onNext, onBack, currentUser: propUser }) {
   const { venueId, bookDate, startTime, endTime, selectedVenue } = slotData;
+  const activeUser = propUser || sessionManager.getUser();
 
   const [eventName,   setEventName]   = useState('');
-  const [deptName,    setDeptName]    = useState(() => currentUser?.departmentName || 'Information Technology');
-  const [facultyName, setFacultyName] = useState(currentUser?.name || '');
+  const [deptName,    setDeptName]    = useState(() => activeUser?.departmentName || activeUser?.departmentId || 'General');
+  const [facultyName, setFacultyName] = useState(() => activeUser?.name || localStorage.getItem('kirti_faculty_name') || '');
   const [classYear,   setClassYear]   = useState('');
   const [attendees,   setAttendees]   = useState(75);
   const [eventDesc,   setEventDesc]   = useState('');
-  const [email,       setEmail]       = useState('');
-  const [phone,       setPhone]       = useState('');
+  const [email,       setEmail]       = useState(() => activeUser?.email || localStorage.getItem('kirti_faculty_email') || '');
+  const [phone,       setPhone]       = useState(() => activeUser?.mobile || activeUser?.phone || localStorage.getItem('kirti_faculty_phone') || '');
   const [submitting,  setSubmitting]  = useState(false);
 
   useEffect(() => {
-    if (currentUser?.name) setFacultyName(currentUser.name);
-    else { const s = localStorage.getItem('kirti_faculty_name'); if (s) setFacultyName(s); }
-    if (currentUser?.departmentName) setDeptName(currentUser.departmentName);
-  }, [currentUser]);
+    const u = propUser || sessionManager.getUser();
+    if (u) {
+      if (u.name) setFacultyName(u.name);
+      if (u.departmentName || u.departmentId) setDeptName(u.departmentName || u.departmentId);
+      if (u.email) setEmail(u.email);
+      if (u.mobile || u.phone) setPhone(u.mobile || u.phone);
+    } else {
+      const sName = localStorage.getItem('kirti_faculty_name');
+      if (sName) setFacultyName(sName);
+      const sEmail = localStorage.getItem('kirti_faculty_email');
+      if (sEmail) setEmail(sEmail);
+      const sPhone = localStorage.getItem('kirti_faculty_phone');
+      if (sPhone) setPhone(sPhone);
+    }
+  }, [propUser]);
 
   const overCapacity = selectedVenue && Number(attendees) > selectedVenue.capacity;
 
@@ -634,6 +646,8 @@ function StepForm({ slotData, onNext, onBack, currentUser }) {
         phone: phone.trim(),
       });
       localStorage.setItem('kirti_faculty_name', facultyName.trim());
+      if (email.trim()) localStorage.setItem('kirti_faculty_email', email.trim());
+      if (phone.trim()) localStorage.setItem('kirti_faculty_phone', phone.trim());
       onNext({ ...res, venueName: selectedVenue?.name || res.venueName, departmentName: deptName });
     } catch (err) {
       showCustomToast('Booking Failed', err.message, 'error');
