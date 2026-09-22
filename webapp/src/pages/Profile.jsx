@@ -85,7 +85,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
     }
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
 
@@ -100,20 +100,47 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       return;
     }
 
-    const updatedUser = {
-      ...currentUser,
-      name: editForm.name.trim(),
-      departmentName: editForm.department.trim() || 'General',
-      departmentId: editForm.department.trim() || 'General',
-      mobile: cleanMobile || currentUser.mobile || '',
-      email: editForm.email.trim(),
-    };
+    try {
+      // Call backend to persist changes permanently
+      const res = await api.updateFacultyProfile(currentUser.id, {
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        mobile: cleanMobile || currentUser.mobile || '',
+        departmentId: editForm.department.trim() || currentUser.departmentId || 'General',
+      });
 
-    sessionManager.setUser(updatedUser);
-    onUserChange?.(updatedUser);
-    setActiveModal(null);
-    showCustomToast('Profile updated successfully!', 'success');
+      // Merge server-returned user with current session data
+      const updatedUser = {
+        ...currentUser,
+        ...(res.user || {}),
+        name: res.user?.name || editForm.name.trim(),
+        departmentName: res.user?.departmentName || editForm.department.trim() || 'General',
+        departmentId: res.user?.departmentId || editForm.department.trim() || 'General',
+        mobile: res.user?.mobile || cleanMobile || currentUser.mobile || '',
+        email: res.user?.email || editForm.email.trim(),
+      };
+
+      sessionManager.setUser(updatedUser);
+      onUserChange?.(updatedUser);
+      setActiveModal(null);
+      showCustomToast('✅ Profile updated successfully!', 'success');
+    } catch (err) {
+      // Fallback: save locally even if backend fails
+      const updatedUser = {
+        ...currentUser,
+        name: editForm.name.trim(),
+        departmentName: editForm.department.trim() || 'General',
+        departmentId: editForm.department.trim() || 'General',
+        mobile: cleanMobile || currentUser.mobile || '',
+        email: editForm.email.trim(),
+      };
+      sessionManager.setUser(updatedUser);
+      onUserChange?.(updatedUser);
+      setActiveModal(null);
+      showCustomToast('Profile saved locally (sync failed: ' + err.message + ')', 'warning');
+    }
   };
+
 
   const handleLogout = () => {
     sessionManager.logout();

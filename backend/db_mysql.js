@@ -258,6 +258,25 @@ const dbMysql = {
     `, [id]);
     return rows[0] || null;
   },
+  updateFacultyProfile: async (id, fields) => {
+    await query('UPDATE faculty SET name = ?, email = ?, mobile = ?, departmentId = ? WHERE id = ?', [
+      fields.name,
+      fields.email,
+      fields.mobile,
+      fields.departmentId,
+      id
+    ]);
+    const rows = await query(`
+      SELECT f.*, d.name as designationName, 
+             COALESCE(dept.name, f.departmentId, '') as departmentName,
+             CONCAT(IFNULL(d.name, ''), ' ', f.name) as fullName 
+      FROM faculty f
+      LEFT JOIN designations d ON f.designationId = d.id
+      LEFT JOIN departments dept ON f.departmentId = dept.id
+      WHERE f.id = ?
+    `, [id]);
+    return rows[0] || null;
+  },
   updateFacultyStatus: async (id, status) => {
     await query('UPDATE faculty SET status = ? WHERE id = ?', [status, id]);
     const rows = await query(`

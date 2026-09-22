@@ -195,6 +195,10 @@ export const api = {
   createInstantSession: (payload) =>
     fetchJSON('/attendance/create-instant-session', { method: 'POST', body: JSON.stringify(payload) }),
 
+  // ── Faculty Self-Service Profile Update ──
+  updateFacultyProfile: (id, payload) =>
+    fetchJSON(`/faculty/${id}/profile`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
   // ── Admin ──
   getAdminStats: () => fetchJSON('/admin/stats'),
 

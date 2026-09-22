@@ -163,6 +163,29 @@ const dbSupabase = {
     `, [id]);
     return rows[0] || null;
   },
+  updateFacultyProfile: async (id, fields) => {
+    await query(`
+      UPDATE faculty 
+      SET name = $1, email = $2, mobile = $3, "departmentId" = $4 
+      WHERE id = $5
+    `, [
+      fields.name,
+      fields.email,
+      fields.mobile,
+      fields.departmentId,
+      id
+    ]);
+    const rows = await query(`
+      SELECT f.*, d.name as "designationName", 
+             COALESCE(dept.name, f."departmentId", '') as "departmentName",
+             CONCAT(COALESCE(d.name, ''), ' ', f.name) as "fullName" 
+      FROM faculty f
+      LEFT JOIN designations d ON f."designationId" = d.id
+      LEFT JOIN departments dept ON f."departmentId" = dept.id
+      WHERE f.id = $1
+    `, [id]);
+    return rows[0] || null;
+  },
   updateFacultyStatus: async (id, status) => {
     await query('UPDATE faculty SET status = $1 WHERE id = $2', [status, id]);
     const rows = await query(`

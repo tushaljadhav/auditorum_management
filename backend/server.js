@@ -462,6 +462,53 @@ app.put('/api/faculty/:id', requireAuth, async (req, res) => {
   }
 });
 
+// Self-service profile update (faculty updating their own profile)
+app.patch('/api/faculty/:id/profile', async (req, res) => {
+  const { name, email, mobile, departmentId } = req.body;
+  const { id } = req.params;
+
+  if (!name || !String(name).trim()) {
+    return res.status(400).json({ error: 'Name is required.' });
+  }
+
+  let cleanMobile = mobile ? String(mobile).replace(/[^0-9]/g, '') : '';
+  if (cleanMobile && !/^[6-9]\d{9}$/.test(cleanMobile.slice(-10))) {
+    return res.status(400).json({ error: 'Invalid mobile number format.' });
+  }
+  if (cleanMobile.length > 10) cleanMobile = cleanMobile.slice(-10);
+  const formattedMobile = cleanMobile ? `+91 ${cleanMobile.substring(0, 5)} ${cleanMobile.substring(5)}` : (mobile || '');
+
+  try {
+    const existing = await dbMysql.getFaculty();
+    const faculty = existing.find(f => f.id === id);
+    if (!faculty) return res.status(404).json({ error: 'Faculty not found.' });
+
+    const updated = await dbMysql.updateFacultyProfile(id, {
+      name: String(name).trim(),
+      email: email ? String(email).trim().toLowerCase() : (faculty.email || ''),
+      mobile: formattedMobile || faculty.mobile || '',
+      departmentId: departmentId || faculty.departmentId || '',
+    });
+
+    res.json({
+      success: true,
+      user: {
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        mobile: updated.mobile,
+        departmentId: updated.departmentId,
+        departmentName: updated.departmentName || updated.departmentId || '',
+        designationName: updated.designationName || faculty.designationName || 'Faculty',
+        role: 'faculty',
+        status: updated.status || faculty.status,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/faculty/:id', requireAuth, async (req, res) => {
   try {
     const success = await dbMysql.deleteFaculty(req.params.id);
