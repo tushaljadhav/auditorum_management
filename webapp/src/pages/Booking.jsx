@@ -524,182 +524,113 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
         </div>
       )}
 
-      {/* ── Professional Confirmation Popup Modal (Good UI & Design) ── */}
+      {/* ── Simple & Decent Confirmation Popup Modal ── */}
       {showConfirmModal && result?.available && (
         <div className="modal-backdrop" onClick={() => setShowConfirmModal(false)}>
           <div
             className="modal-content"
             onClick={e => e.stopPropagation()}
             style={{
-              maxWidth: 420,
-              padding: '26px 22px',
+              maxWidth: 380,
+              padding: '20px',
               background: '#FFFFFF',
-              borderRadius: 24,
-              boxShadow: '0 25px 60px -12px rgba(15, 23, 42, 0.35)',
-              border: '1.5px solid #E2E8F0',
-              animation: 'scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-              position: 'relative',
-              overflow: 'hidden'
+              borderRadius: 16,
+              boxShadow: '0 12px 30px rgba(0, 0, 0, 0.15)',
+              border: '1px solid #E2E8F0',
+              animation: 'scaleUp 0.2s ease-out',
             }}
           >
-            {/* Top decorative accent */}
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: 5,
-              background: 'linear-gradient(90deg, #10B981, #059669, #34D399)'
-            }} />
-
-            {/* Header Badge & Close Button */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: '#ECFDF5',
-                border: '1.5px solid #A7F3D0',
-                color: '#059669',
-                padding: '4px 12px',
-                borderRadius: 999,
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: 0.5,
-                textTransform: 'uppercase'
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
-                Available &amp; Verified
-              </span>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle2 size={18} color="#10B981" />
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                  Slot Available
+                </h3>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowConfirmModal(false)}
                 className="btn-icon"
-                style={{ width: 32, height: 32, borderRadius: 10, border: '1px solid #E2E8F0', background: '#F8FAFC' }}
+                style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: '#F1F5F9' }}
               >
-                <X size={16} />
+                <X size={15} />
               </button>
             </div>
 
-            {/* Icon & Title */}
-            <div style={{ textAlign: 'center', marginBottom: 20 }}>
-              <div style={{
-                width: 58,
-                height: 58,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #ECFDF5, #D1FAE5)',
-                border: '2px solid #86EFAC',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 12px',
-                color: '#059669',
-                boxShadow: '0 8px 20px rgba(16, 185, 129, 0.18)'
-              }}>
-                <CheckCircle2 size={32} strokeWidth={2.5} />
-              </div>
-              <h3 style={{ fontSize: 19, fontWeight: 900, color: '#0F172A', margin: 0 }}>
-                {selectedVenue?.name || 'Hall'} is Available!
-              </h3>
-              <p style={{ fontSize: 12, color: '#64748B', marginTop: 4, margin: '4px 0 0' }}>
-                Great! No booking conflicts detected for this slot.
-              </p>
-            </div>
-
-            {/* Booking Details Card */}
+            {/* Summary Details */}
             <div style={{
               background: '#F8FAFC',
-              border: '1.5px solid #E2E8F0',
-              borderRadius: 16,
-              padding: '16px',
-              marginBottom: 20,
+              borderRadius: 12,
+              padding: '12px 14px',
+              border: '1px solid #EEF2F6',
+              marginBottom: 16,
               display: 'flex',
               flexDirection: 'column',
-              gap: 12
+              gap: 8,
+              fontSize: 13,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, borderBottom: '1px solid #EEF2F6' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Building2 size={16} color="var(--primary)" />
-                  <span style={{ fontSize: 13, fontWeight: 800, color: '#0F172A' }}>{selectedVenue?.name}</span>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 800, background: 'var(--primary-light)', color: 'var(--primary-deeper)', padding: '3px 10px', borderRadius: 8 }}>
-                  {selectedVenue?.capacity} Seats
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#64748B', fontWeight: 500 }}>Venue</span>
+                <span style={{ fontWeight: 700, color: '#1E293B' }}>{selectedVenue?.name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#64748B', fontWeight: 500 }}>Date</span>
+                <span style={{ fontWeight: 600, color: '#1E293B' }}>{bookDate}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#64748B', fontWeight: 500 }}>Time</span>
+                <span style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                  {fmt12(startTime)} – {endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}
                 </span>
               </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Date</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1E293B', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Calendar size={12} color="#64748B" /> {bookDate}
-                  </div>
+              {durationLabel && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#64748B', fontWeight: 500 }}>Duration</span>
+                  <span style={{ fontWeight: 600, color: '#64748B' }}>{durationLabel}</span>
                 </div>
-
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Duration</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1E293B', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Clock size={12} color="#64748B" /> {durationLabel || 'Custom'}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{
-                background: '#FFFFFF',
-                padding: '10px 12px',
-                borderRadius: 12,
-                border: '1px solid #E2E8F0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>Time Window:</span>
-                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--primary)' }}>
-                  {fmt12(startTime)} → {endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}
-                </span>
-              </div>
+              )}
             </div>
 
             {/* Action Buttons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10 }}>
               <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                style={{
+                  flex: 1,
+                  height: 42,
+                  borderRadius: 10,
+                  background: '#F1F5F9',
+                  border: '1px solid #E2E8F0',
+                  color: '#475569',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setShowConfirmModal(false);
                   onNext({ venueId, bookDate, startTime, endTime, selectedVenue });
                 }}
+                className="btn-primary"
                 style={{
-                  height: 48,
-                  borderRadius: 14,
-                  background: 'linear-gradient(135deg, #10B981, #059669)',
-                  border: 'none',
-                  color: '#FFFFFF',
-                  fontSize: 14,
-                  fontWeight: 800,
-                  cursor: 'pointer',
+                  flex: 2,
+                  height: 42,
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
-                  boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)',
-                  transition: 'transform 0.15s ease'
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                Proceed to Fill Details <ArrowRight size={16} />
-              </button>
-
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                style={{
-                  height: 38,
-                  borderRadius: 12,
-                  background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  color: '#64748B',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
+                  gap: 6,
                 }}
               >
-                Choose a Different Time
+                Proceed <ArrowRight size={15} />
               </button>
             </div>
           </div>
