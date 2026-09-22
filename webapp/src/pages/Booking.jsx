@@ -83,7 +83,8 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
   const [dayBookings, setDayBookings] = useState([]);
   const [slots, setSlots] = useState([]);
   const [slotPage, setSlotPage] = useState(0);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictModalData, setConflictModalData] = useState(null);
 
   useEffect(() => {
     if (venues.length > 0 && !venueId) setVenueId(venues[0].id);
@@ -132,21 +133,59 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
       showCustomToast('Operating Hours', 'Bookings are between 5:00 AM and 12:00 AM', 'warning');
       return;
     }
+
+    const sStart = timeToMins(startTime);
+    const sEnd = timeToMins(endTime);
+    const localConflict = dayBookings.find(b => {
+      const bStart = timeToMins(b.startTime);
+      const bEnd = timeToMins(b.endTime);
+      return sStart < bEnd && sEnd > bStart;
+    });
+
+    if (localConflict) {
+      const bookedBy = localConflict.facultyName || localConflict.coordinator || 'Faculty';
+      setConflictModalData({
+        venueName: selectedVenue?.name || 'Hall',
+        date: bookDate,
+        time: `${fmt12(startTime)} – ${endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}`,
+        bookedBy,
+        eventName: localConflict.eventName || ''
+      });
+      setShowConflictModal(true);
+      return;
+    }
+
     setChecking(true);
     try {
       const res = await api.checkAvailability({ venueId, bookingDate: bookDate, startTime, endTime });
       const isAvailable = Boolean(res.isAvailable);
-      setResult({ ...res, available: isAvailable });
-      setDayBookings(res.bookingsOnDay || []);
-      setSlots(res.alternatives || []);
-      setSlotPage(0);
+
       if (isAvailable) {
-        setShowConfirmModal(true);
+        // Direct transition to next page if available!
+        onNext({ venueId, bookDate, startTime, endTime, selectedVenue });
       } else {
-        setShowConfirmModal(false);
+        const conflict = res.conflict || localConflict;
+        const bookedBy = conflict?.facultyName || conflict?.coordinator || 'Faculty';
+        setConflictModalData({
+          venueName: selectedVenue?.name || 'Hall',
+          date: bookDate,
+          time: `${fmt12(startTime)} – ${endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}`,
+          bookedBy,
+          eventName: conflict?.eventName || '',
+          error: res.error
+        });
+        setShowConflictModal(true);
       }
     } catch (err) {
-      showCustomToast('Error', err.message, 'error');
+      setConflictModalData({
+        venueName: selectedVenue?.name || 'Hall',
+        date: bookDate,
+        time: `${fmt12(startTime)} – ${endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}`,
+        bookedBy: localConflict?.facultyName || 'Faculty',
+        eventName: localConflict?.eventName || '',
+        error: err.message || 'Yeh slot available nahi hai.'
+      });
+      setShowConflictModal(true);
     } finally {
       setChecking(false);
     }
@@ -326,9 +365,18 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
                 <button
                   key={slot.id}
                   type="button"
-                  disabled={isBooked}
                   onClick={() => {
-                    if (isBooked) return;
+                    if (isBooked) {
+                      setConflictModalData({
+                        venueName: selectedVenue?.name || 'Hall',
+                        date: bookDate,
+                        time: `${fmt12(slot.start)} – ${slot.end === '00:00' ? '12:00 AM' : fmt12(slot.end)}`,
+                        bookedBy,
+                        eventName: conflict?.eventName || '',
+                      });
+                      setShowConflictModal(true);
+                      return;
+                    }
                     setStartTime(slot.start);
                     setEndTime(slot.end);
                     setResult(null);
@@ -446,193 +494,96 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
         </button>
       </div>
 
-      {/* ── Result ── */}
-      {result && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{
-            borderRadius: 'var(--r-lg)', padding: '16px',
-            background: result.available ? '#ECFDF5' : '#FEF2F2',
-            border: `1.5px solid ${result.available ? '#A7F3D0' : '#FECACA'}`,
-            marginBottom: 12,
-          }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              {result.available
-                ? <CheckCircle2 size={22} color="#059669" style={{ flexShrink: 0 }} />
-                : <AlertTriangle size={22} color="#DC2626" style={{ flexShrink: 0 }} />
-              }
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: result.available ? '#065F46' : '#991B1B' }}>
-                  {result.available ? '✓ Slot Available!' : '✗ Slot Not Available'}
-                </div>
-                {result.available ? (
-                  <div style={{ fontSize: 12, color: '#059669', marginTop: 4 }}>
-                    <strong>{selectedVenue?.name}</strong> is free on <strong>{bookDate}</strong> from <strong>{fmt12(startTime)}</strong> to <strong>{endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}</strong> ({durationLabel}).
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, color: '#991B1B', marginTop: 4 }}>
-                    {result.error || result.conflict || 'This slot overlaps with an existing booking. Pick another time below.'}
-                  </div>
-                )}
-              </div>
-            </div>
-            {result.available && (
-              <button
-                type="button"
-                className="btn-emerald"
-                style={{ marginTop: 14 }}
-                onClick={() => setShowConfirmModal(true)}
-              >
-                <CheckCircle2 size={16} /> View Confirmation &amp; Proceed
-              </button>
-            )}
-          </div>
-
-          {/* Alternative slots */}
-          {slots.length > 0 && (
-            <div>
-              <div className="field-label" style={{ marginBottom: 8 }}>
-                {result.available ? 'OTHER FREE SLOTS TODAY' : 'SUGGESTED ALTERNATIVES'}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {visibleSlots.map((slot, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      const s = slot.startTime || slot.start;
-                      const e = slot.endTime || slot.end;
-                      setStartTime(s);
-                      setEndTime(e);
-                      setResult(null);
-                    }}
-                    className="slot-chip free"
-                  >
-                    <div style={{ fontSize: 11, fontWeight: 700 }}>
-                      {fmt12(slot.start)} – {fmt12(slot.end)}
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {totalSlotPages > 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 }}>
-                  <button onClick={() => setSlotPage(p => Math.max(0, p-1))} disabled={slotPage === 0} className="btn-icon" style={{ width: 30, height: 30 }}><ChevronLeft size={14} /></button>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{slotPage+1}/{totalSlotPages}</span>
-                  <button onClick={() => setSlotPage(p => Math.min(totalSlotPages-1, p+1))} disabled={slotPage >= totalSlotPages-1} className="btn-icon" style={{ width: 30, height: 30 }}><ChevronRight size={14} /></button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Simple & Decent Confirmation Popup Modal ── */}
-      {showConfirmModal && result?.available && (
-        <div className="modal-backdrop" onClick={() => setShowConfirmModal(false)}>
+      {/* ── Slot Already Booked / Conflict Popup Modal ── */}
+      {showConflictModal && (
+        <div className="modal-backdrop" onClick={() => setShowConflictModal(false)}>
           <div
             className="modal-content"
             onClick={e => e.stopPropagation()}
             style={{
               maxWidth: 380,
-              padding: '20px',
+              padding: '24px 20px',
               background: '#FFFFFF',
-              borderRadius: 16,
-              boxShadow: '0 12px 30px rgba(0, 0, 0, 0.15)',
-              border: '1px solid #E2E8F0',
-              animation: 'scaleUp 0.2s ease-out',
+              borderRadius: 18,
+              boxShadow: '0 16px 36px rgba(0, 0, 0, 0.18)',
+              border: '1.5px solid #FEE2E2',
+              animation: 'scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              textAlign: 'center',
             }}
           >
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <CheckCircle2 size={18} color="#10B981" />
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                  Slot Available
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowConfirmModal(false)}
-                className="btn-icon"
-                style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: '#F1F5F9' }}
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            {/* Summary Details */}
+            {/* Header Icon */}
             <div style={{
-              background: '#F8FAFC',
-              borderRadius: 12,
-              padding: '12px 14px',
-              border: '1px solid #EEF2F6',
-              marginBottom: 16,
+              width: 54,
+              height: 54,
+              borderRadius: '50%',
+              background: '#FEE2E2',
+              color: '#DC2626',
               display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              fontSize: 13,
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 12px',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748B', fontWeight: 500 }}>Venue</span>
-                <span style={{ fontWeight: 700, color: '#1E293B' }}>{selectedVenue?.name}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748B', fontWeight: 500 }}>Date</span>
-                <span style={{ fontWeight: 600, color: '#1E293B' }}>{bookDate}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#64748B', fontWeight: 500 }}>Time</span>
-                <span style={{ fontWeight: 700, color: 'var(--primary)' }}>
-                  {fmt12(startTime)} – {endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}
-                </span>
-              </div>
-              {durationLabel && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748B', fontWeight: 500 }}>Duration</span>
-                  <span style={{ fontWeight: 600, color: '#64748B' }}>{durationLabel}</span>
-                </div>
-              )}
+              <AlertTriangle size={28} strokeWidth={2.5} />
             </div>
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => setShowConfirmModal(false)}
-                style={{
-                  flex: 1,
-                  height: 42,
-                  borderRadius: 10,
-                  background: '#F1F5F9',
-                  border: '1px solid #E2E8F0',
-                  color: '#475569',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  onNext({ venueId, bookDate, startTime, endTime, selectedVenue });
-                }}
-                className="btn-primary"
-                style={{
-                  flex: 2,
-                  height: 42,
-                  borderRadius: 10,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                }}
-              >
-                Proceed <ArrowRight size={15} />
-              </button>
-            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: '0 0 6px' }}>
+              Slot Available Nahi Hai!
+            </h3>
+
+            <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5, margin: '0 0 16px' }}>
+              Yeh slot already kisi aur ne book kiya hua hai. Kripya doosra slot ya timing select karein.
+            </p>
+
+            {conflictModalData && (
+              <div style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: 12,
+                padding: '12px 14px',
+                textAlign: 'left',
+                marginBottom: 18,
+                fontSize: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Venue:</span>
+                  <span style={{ color: '#0F172A', fontWeight: 700 }}>{conflictModalData.venueName}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748B', fontWeight: 600 }}>Timing:</span>
+                  <span style={{ color: '#DC2626', fontWeight: 700 }}>{conflictModalData.time}</span>
+                </div>
+                {conflictModalData.bookedBy && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>Booked By:</span>
+                    <span style={{ color: '#1E293B', fontWeight: 700 }}>👤 {conflictModalData.bookedBy}</span>
+                  </div>
+                )}
+                {conflictModalData.eventName && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600 }}>Event:</span>
+                    <span style={{ color: '#1E293B', fontWeight: 600 }}>{conflictModalData.eventName}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowConflictModal(false)}
+              className="btn-primary"
+              style={{
+                width: '100%',
+                height: 44,
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 700,
+              }}
+            >
+              Choose Another Slot
+            </button>
           </div>
         </div>
       )}
