@@ -116,21 +116,12 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
 
     const firstName = editForm.firstName.trim();
     const lastName = editForm.lastName.trim();
-    if (!firstName) {
-      showCustomToast('First Name is required', 'warning');
-      return;
-    }
-    if (!lastName) {
-      showCustomToast('Last Name is required', 'warning');
-      return;
-    }
+    if (!firstName) return;
+    if (!lastName) return;
     const fullName = `${firstName} ${lastName}`;
 
     const cleanMobile = strip10Digits(editForm.mobile);
-    if (cleanMobile && cleanMobile.length < 10) {
-      showCustomToast('Please enter a valid 10-digit phone number', 'warning');
-      return;
-    }
+    if (cleanMobile && cleanMobile.length < 10) return;
 
     try {
       // Call backend to persist changes permanently
@@ -155,7 +146,6 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       sessionManager.setUser(updatedUser);
       onUserChange?.(updatedUser);
       setActiveModal(null);
-      showCustomToast('✅ Profile updated successfully!', 'success');
     } catch (err) {
       // Fallback: save locally even if backend fails
       const updatedUser = {
@@ -169,7 +159,6 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       sessionManager.setUser(updatedUser);
       onUserChange?.(updatedUser);
       setActiveModal(null);
-      showCustomToast('Profile saved locally (sync failed: ' + err.message + ')', 'warning');
     }
   };
 
