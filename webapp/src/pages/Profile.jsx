@@ -36,18 +36,33 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
     return digits.slice(0, 10);
   };
 
+  // Helper: split stored full name into first/last
+  const splitName = (fullName) => {
+    const parts = (fullName || '').trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+    }
+    return { firstName: fullName || '', lastName: '' };
+  };
+
   // Edit Profile Form State
-  const [editForm, setEditForm] = useState({
-    name: currentUser?.name || '',
-    department: currentUser?.departmentName || '',
-    mobile: strip10Digits(currentUser?.mobile),
-    email: currentUser?.email || '',
+  const [editForm, setEditForm] = useState(() => {
+    const { firstName, lastName } = splitName(currentUser?.name);
+    return {
+      firstName,
+      lastName,
+      department: currentUser?.departmentName || '',
+      mobile: strip10Digits(currentUser?.mobile),
+      email: currentUser?.email || '',
+    };
   });
 
   useEffect(() => {
     if (currentUser) {
+      const { firstName, lastName } = splitName(currentUser.name);
       setEditForm({
-        name: currentUser.name || '',
+        firstName,
+        lastName,
         department: currentUser.departmentName || '',
         mobile: strip10Digits(currentUser.mobile),
         email: currentUser.email || '',
@@ -99,10 +114,17 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
     e.preventDefault();
     if (!currentUser) return;
 
-    if (!editForm.name.trim()) {
-      showCustomToast('Full Name is required', 'warning');
+    const firstName = editForm.firstName.trim();
+    const lastName = editForm.lastName.trim();
+    if (!firstName) {
+      showCustomToast('First Name is required', 'warning');
       return;
     }
+    if (!lastName) {
+      showCustomToast('Last Name is required', 'warning');
+      return;
+    }
+    const fullName = `${firstName} ${lastName}`;
 
     const cleanMobile = strip10Digits(editForm.mobile);
     if (cleanMobile && cleanMobile.length < 10) {
@@ -113,7 +135,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
     try {
       // Call backend to persist changes permanently
       const res = await api.updateFacultyProfile(currentUser.id, {
-        name: editForm.name.trim(),
+        name: fullName,
         email: editForm.email.trim(),
         mobile: cleanMobile || currentUser.mobile || '',
         departmentId: editForm.department.trim() || currentUser.departmentId || 'General',
@@ -123,7 +145,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       const updatedUser = {
         ...currentUser,
         ...(res.user || {}),
-        name: res.user?.name || editForm.name.trim(),
+        name: res.user?.name || fullName,
         departmentName: res.user?.departmentName || editForm.department.trim() || 'General',
         departmentId: res.user?.departmentId || editForm.department.trim() || 'General',
         mobile: res.user?.mobile || cleanMobile || currentUser.mobile || '',
@@ -138,7 +160,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       // Fallback: save locally even if backend fails
       const updatedUser = {
         ...currentUser,
-        name: editForm.name.trim(),
+        name: fullName,
         departmentName: editForm.department.trim() || 'General',
         departmentId: editForm.department.trim() || 'General',
         mobile: cleanMobile || currentUser.mobile || '',
@@ -603,21 +625,44 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
               </div>
 
               <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                    FULL NAME
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.name}
-                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                    style={{
-                      width: '100%', height: 42, padding: '0 12px',
-                      borderRadius: 8, border: '1.5px solid var(--border)',
-                      fontSize: 14, background: 'var(--surface)', color: 'var(--text-primary)'
-                    }}
-                  />
+                {/* First Name + Last Name row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                      FIRST NAME
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Rahul"
+                      value={editForm.firstName}
+                      onChange={e => setEditForm({ ...editForm, firstName: e.target.value })}
+                      style={{
+                        width: '100%', height: 42, padding: '0 12px',
+                        borderRadius: 8, border: '1.5px solid var(--border)',
+                        fontSize: 14, background: 'var(--surface)', color: 'var(--text-primary)',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
+                      LAST NAME
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Sharma"
+                      value={editForm.lastName}
+                      onChange={e => setEditForm({ ...editForm, lastName: e.target.value })}
+                      style={{
+                        width: '100%', height: 42, padding: '0 12px',
+                        borderRadius: 8, border: '1.5px solid var(--border)',
+                        fontSize: 14, background: 'var(--surface)', color: 'var(--text-primary)',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div>
