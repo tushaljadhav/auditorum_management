@@ -5,7 +5,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { downloadOfficialReceiptPDF } from '../utils/pdfHeader';
 import {
   Calendar, Clock, Building2, Users, CheckCircle2,
-  AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight,
+  AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown,
   Download, Search, MapPin, Check, FileDown, Copy,
   Zap, Star, ArrowRight, X, Sparkles
 } from 'lucide-react';
@@ -22,16 +22,25 @@ const TIME_SLOTS = [
 ];
 
 const STANDARD_DAY_SLOTS = [
-  { id: 's1',  start: '05:00', end: '07:00' },
-  { id: 's2',  start: '07:00', end: '09:00' },
-  { id: 's3',  start: '09:00', end: '11:00' },
-  { id: 's4',  start: '11:00', end: '13:00' },
-  { id: 's5',  start: '13:00', end: '15:00' },
-  { id: 's6',  start: '15:00', end: '17:00' },
-  { id: 's7',  start: '17:00', end: '19:00' },
-  { id: 's8',  start: '19:00', end: '21:00' },
-  { id: 's9',  start: '21:00', end: '23:00' },
-  { id: 's10', start: '23:00', end: '00:00' },
+  { id: 's1',  start: '05:00', end: '06:00' },
+  { id: 's2',  start: '06:00', end: '07:00' },
+  { id: 's3',  start: '07:00', end: '08:00' },
+  { id: 's4',  start: '08:00', end: '09:00' },
+  { id: 's5',  start: '09:00', end: '10:00' },
+  { id: 's6',  start: '10:00', end: '11:00' },
+  { id: 's7',  start: '11:00', end: '12:00' },
+  { id: 's8',  start: '12:00', end: '13:00' },
+  { id: 's9',  start: '13:00', end: '14:00' },
+  { id: 's10', start: '14:00', end: '15:00' },
+  { id: 's11', start: '15:00', end: '16:00' },
+  { id: 's12', start: '16:00', end: '17:00' },
+  { id: 's13', start: '17:00', end: '18:00' },
+  { id: 's14', start: '18:00', end: '19:00' },
+  { id: 's15', start: '19:00', end: '20:00' },
+  { id: 's16', start: '20:00', end: '21:00' },
+  { id: 's17', start: '21:00', end: '22:00' },
+  { id: 's18', start: '22:00', end: '23:00' },
+  { id: 's19', start: '23:00', end: '00:00' },
 ];
 
 function timeToMins(t) {
@@ -83,12 +92,17 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
   const [dayBookings, setDayBookings] = useState([]);
   const [slots, setSlots] = useState([]);
   const [slotPage, setSlotPage] = useState(0);
+  const [venueDropdownOpen, setVenueDropdownOpen] = useState(false);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [conflictModalData, setConflictModalData] = useState(null);
 
   useEffect(() => {
     if (venues.length > 0 && !venueId) setVenueId(venues[0].id);
   }, [venues, venueId]);
+
+  useEffect(() => {
+    setSlotPage(0);
+  }, [slotFilter, venueId, bookDate]);
 
   // Load existing bookings on the selected venue & date
   useEffect(() => {
@@ -203,9 +217,9 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
     return true;
   });
 
-  const SLOTS_PER_PAGE = 6;
-  const totalSlotPages = Math.ceil(slots.length / SLOTS_PER_PAGE);
-  const visibleSlots = slots.slice(slotPage * SLOTS_PER_PAGE, (slotPage + 1) * SLOTS_PER_PAGE);
+  const SLOTS_PER_PAGE = 8;
+  const totalSlotPages = Math.ceil(filteredSuggestions.length / SLOTS_PER_PAGE) || 1;
+  const visibleSlots = filteredSuggestions.slice(slotPage * SLOTS_PER_PAGE, (slotPage + 1) * SLOTS_PER_PAGE);
 
   return (
     <div className="animate-fade-in">
@@ -215,49 +229,171 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
         <p className="section-subtitle">Pick a venue, date &amp; time slot</p>
       </div>
 
-      {/* ── Venue Dropdown ── */}
+      {/* ── Modern Decent Venue Selector Dropdown ── */}
       <div style={{ marginBottom: 16 }}>
-        <label className="field-label"><Building2 size={11} style={{ display: 'inline', marginRight: 4 }} />Select Venue</label>
-        <div style={{ position: 'relative' }}>
-          <select
-            className="app-input"
-            value={venueId}
-            onChange={e => { setVenueId(e.target.value); setResult(null); }}
-            style={{ paddingRight: 36, appearance: 'none', WebkitAppearance: 'none' }}
-          >
-            {venues.map(v => (
-              <option key={v.id} value={v.id}>
-                {v.name} — {v.capacity} seats{v.location ? ` · ${v.location}` : ''}
-              </option>
-            ))}
-          </select>
-          <div style={{
-            position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-            pointerEvents: 'none', color: 'var(--primary)',
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </div>
-        </div>
-        {/* Selected venue info pill */}
-        {selectedVenue && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, marginTop: 8,
-            padding: '8px 12px', borderRadius: 'var(--r-md)',
-            background: 'var(--primary-light)', border: '1px solid var(--primary-border)',
-          }}>
-            <span style={{ fontSize: 16 }}>{VENUE_ICONS[venues.findIndex(v => v.id === venueId) % VENUE_ICONS.length]}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--primary-deeper)' }} className="truncate">{selectedVenue.name}</div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 2 }}>
-                <span style={{ fontSize: 10, color: 'var(--primary)', fontWeight: 700 }}><Users size={9} style={{ display: 'inline', marginRight: 2 }} />{selectedVenue.capacity} seats</span>
-                {selectedVenue.location && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}><MapPin size={9} style={{ display: 'inline', marginRight: 2 }} />{selectedVenue.location}</span>}
+        <label className="field-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span><Building2 size={11} style={{ display: 'inline', marginRight: 4 }} />Select Venue</span>
+          {venues.length > 0 && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{venues.length} Venues</span>
+          )}
+        </label>
+
+        {/* Selected Venue Trigger Card */}
+        <div
+          onClick={() => setVenueDropdownOpen(!venueDropdownOpen)}
+          style={{
+            padding: '10px 14px',
+            borderRadius: 'var(--r-lg)',
+            background: '#FFFFFF',
+            border: venueDropdownOpen ? '1.5px solid var(--primary)' : '1.5px solid var(--border)',
+            boxShadow: venueDropdownOpen ? '0 0 0 3px var(--primary-light)' : '0 1px 4px rgba(0,0,0,0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            userSelect: 'none'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+            <div style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              background: 'var(--primary-light)',
+              border: '1px solid var(--primary-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 18,
+              flexShrink: 0
+            }}>
+              {selectedVenue ? VENUE_ICONS[venues.findIndex(v => v.id === venueId) % VENUE_ICONS.length] : '🏛️'}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }} className="truncate">
+                {selectedVenue ? selectedVenue.name : 'Select Venue'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                {selectedVenue && (
+                  <>
+                    <span style={{ fontSize: 11, color: 'var(--primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <Users size={11} /> {selectedVenue.capacity} seats
+                    </span>
+                    {selectedVenue.location && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <MapPin size={11} /> {selectedVenue.location}
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
             </div>
-            <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Check size={11} color="#FFFFFF" strokeWidth={3} />
-            </div>
+          </div>
+
+          <div style={{
+            color: 'var(--primary)',
+            transition: 'transform 0.2s ease',
+            transform: venueDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            paddingLeft: 8
+          }}>
+            <ChevronDown size={18} />
+          </div>
+        </div>
+
+        {/* Dropdown Options Menu */}
+        {venueDropdownOpen && (
+          <div style={{
+            marginTop: 6,
+            borderRadius: 'var(--r-lg)',
+            background: '#FFFFFF',
+            border: '1.5px solid var(--border)',
+            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.12)',
+            overflow: 'hidden',
+            zIndex: 60,
+            position: 'relative',
+            animation: 'fadeIn 0.15s ease'
+          }}>
+            {venues.map((v, idx) => {
+              const isSelected = v.id === venueId;
+              const icon = VENUE_ICONS[idx % VENUE_ICONS.length];
+              return (
+                <div
+                  key={v.id}
+                  onClick={() => {
+                    setVenueId(v.id);
+                    setResult(null);
+                    setVenueDropdownOpen(false);
+                  }}
+                  style={{
+                    padding: '11px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    background: isSelected ? 'var(--primary-light)' : 'transparent',
+                    borderBottom: idx < venues.length - 1 ? '1px solid var(--border-light)' : 'none',
+                    transition: 'background 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+                    <div style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 9,
+                      background: isSelected ? '#FFFFFF' : 'var(--surface-subtle)',
+                      border: '1px solid ' + (isSelected ? 'var(--primary-border)' : 'var(--border)'),
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 16,
+                      flexShrink: 0
+                    }}>
+                      {icon}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 13,
+                        fontWeight: isSelected ? 800 : 700,
+                        color: isSelected ? 'var(--primary-deeper)' : 'var(--text-primary)'
+                      }}>
+                        {v.name}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                        <span style={{ fontSize: 11, color: isSelected ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <Users size={11} /> {v.capacity} seats
+                        </span>
+                        {v.location && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <MapPin size={11} /> {v.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isSelected && (
+                    <div style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: 'var(--primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      flexShrink: 0
+                    }}>
+                      <Check size={12} strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -357,7 +493,7 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
           </div>
 
           <div className="slot-grid">
-            {filteredSuggestions.map(slot => {
+            {visibleSlots.map(slot => {
               const { isBooked, conflict } = getSlotAvailability(slot);
               const isSelected = !isBooked && Boolean(startTime) && Boolean(endTime) && startTime === slot.start && endTime === slot.end;
               const bookedBy = conflict?.facultyName || conflict?.coordinator || 'Faculty';
@@ -393,6 +529,59 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
               );
             })}
           </div>
+
+          {/* ── Slot Pagination Controls ── */}
+          {totalSlotPages > 1 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: 12,
+              padding: '8px 0',
+            }}>
+              <button
+                type="button"
+                disabled={slotPage === 0}
+                onClick={() => setSlotPage(p => Math.max(0, p - 1))}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '7px 14px', borderRadius: 'var(--r-md)',
+                  border: '1.5px solid var(--border)',
+                  background: slotPage === 0 ? 'var(--surface-subtle)' : 'var(--surface)',
+                  color: slotPage === 0 ? 'var(--text-muted)' : 'var(--primary)',
+                  fontSize: 12, fontWeight: 700, cursor: slotPage === 0 ? 'default' : 'pointer',
+                  opacity: slotPage === 0 ? 0.45 : 1,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <ChevronLeft size={14} /> Prev
+              </button>
+
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>
+                {slotPage + 1} / {totalSlotPages}
+              </span>
+
+              <button
+                type="button"
+                disabled={slotPage >= totalSlotPages - 1}
+                onClick={() => setSlotPage(p => Math.min(totalSlotPages - 1, p + 1))}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '7px 14px', borderRadius: 'var(--r-md)',
+                  border: '1.5px solid var(--primary)',
+                  background: slotPage >= totalSlotPages - 1 ? 'var(--surface-subtle)' : 'var(--primary)',
+                  color: slotPage >= totalSlotPages - 1 ? 'var(--text-muted)' : '#FFFFFF',
+                  fontSize: 12, fontWeight: 700,
+                  cursor: slotPage >= totalSlotPages - 1 ? 'default' : 'pointer',
+                  opacity: slotPage >= totalSlotPages - 1 ? 0.45 : 1,
+                  transition: 'all 0.15s ease',
+                  boxShadow: slotPage >= totalSlotPages - 1 ? 'none' : '0 2px 8px rgba(99,102,241,0.35)',
+                }}
+              >
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── Custom Timing (Secondary) ── */}
@@ -706,40 +895,10 @@ function StepForm({ slotData, onNext, onBack, currentUser: propUser }) {
           <input className="app-input" type="text" value={deptName} onChange={e => setDeptName(e.target.value)} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div>
-            <label className="field-label">Class / Year</label>
-            <input className="app-input" type="text" placeholder="e.g. T.Y. IT" value={classYear} onChange={e => setClassYear(e.target.value)} />
-          </div>
-          <div>
-            <label className="field-label">Attendees</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button type="button"
-                onClick={() => setAttendees(a => Math.max(1, Number(a) - 5))}
-                style={{ width: 32, height: 38, borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: 16, fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>−</button>
-              <input className="app-input" type="number" min={1} max={selectedVenue?.capacity || 1000}
-                value={attendees} onChange={e => setAttendees(e.target.value)}
-                style={{ textAlign: 'center', padding: '10px 4px' }} />
-              <button type="button"
-                onClick={() => setAttendees(a => Number(a) + 5)}
-                style={{ width: 32, height: 38, borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontSize: 16, fontWeight: 700, color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>+</button>
-            </div>
-          </div>
+        <div>
+          <label className="field-label">Class / Year</label>
+          <input className="app-input" type="text" placeholder="e.g. T.Y. IT" value={classYear} onChange={e => setClassYear(e.target.value)} />
         </div>
-
-        {/* Capacity warning */}
-        {overCapacity && (
-          <div style={{
-            background: '#FFFBEB', border: '1px solid #FDE68A',
-            borderRadius: 'var(--r-md)', padding: '10px 14px',
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <AlertTriangle size={16} color="#D97706" />
-            <div style={{ fontSize: 12, color: '#92400E', fontWeight: 600 }}>
-              ⚠ {attendees} attendees exceeds <strong>{selectedVenue.name}</strong>'s capacity of <strong>{selectedVenue.capacity}</strong>. Consider booking a larger hall.
-            </div>
-          </div>
-        )}
 
         <div>
           <label className="field-label">Brief Description (optional)</label>
