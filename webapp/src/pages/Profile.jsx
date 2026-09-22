@@ -8,7 +8,7 @@ import {
   ChevronRight, Home, Settings, Bell, Info,
   HelpCircle, FileText, Star, X, Check,
   Volume2, VolumeX, Smartphone, Edit3,
-  ExternalLink, Clock, AlertCircle
+  ExternalLink, Clock, AlertCircle, Download
 } from 'lucide-react';
 
 export default function Profile({ currentUser, onUserChange, onNavigate }) {
@@ -64,6 +64,25 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
     setHaptics(val);
     localStorage.setItem('kirti_setting_haptics', String(val));
     showCustomToast(val ? 'Vibration & Haptics on' : 'Vibration & Haptics off', 'info');
+  };
+
+  const handleInstallApp = async () => {
+    const prompt = window.__PWA_DEFERRED_PROMPT__;
+    if (prompt) {
+      prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+      if (outcome === 'accepted') {
+        showCustomToast('🎉 Kirti Faculty App installed!', 'success');
+      }
+      window.__PWA_DEFERRED_PROMPT__ = null;
+    } else {
+      const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+      if (isIOS) {
+        showCustomToast('Tap Safari Share (⎋) -> Add to Home Screen', 'info');
+      } else {
+        showCustomToast('Tap browser menu (⋮) -> Install app', 'info');
+      }
+    }
   };
 
   const handleSaveProfile = (e) => {
@@ -371,6 +390,33 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
                 boxShadow: '0 1px 4px rgba(0,0,0,0.2)'
               }} />
             </div>
+          </div>
+
+          {/* Download Faculty App Option */}
+          <div
+            onClick={handleInstallApp}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '13px 16px', borderTop: '1px solid var(--border-light)',
+              cursor: 'pointer', background: 'rgba(37, 99, 235, 0.04)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(37,99,235,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Download size={16} color="#2563EB" />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 750, color: 'var(--text-primary)' }}>Download Faculty App</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Install to Home Screen for fast offline booking</div>
+              </div>
+            </div>
+            <span style={{
+              background: '#2563EB', color: '#FFF', padding: '6px 14px',
+              borderRadius: 999, fontSize: 11, fontWeight: 750, display: 'flex', alignItems: 'center', gap: 5,
+              boxShadow: '0 2px 8px rgba(37, 99, 235, 0.3)'
+            }}>
+              Install
+            </span>
           </div>
 
         </div>
