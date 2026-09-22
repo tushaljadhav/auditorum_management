@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { exportAttendanceCSV, exportBookingsCSV } from '../utils/excelExport';
 import {
-  FileText, Briefcase, BookOpen, Search,
+  FileText, Briefcase, BookOpen,
   Download, Eye, EyeOff, CheckCircle2, Radio,
   Calendar, MapPin, Clock, Users, ChevronDown, ChevronUp
 } from 'lucide-react';
@@ -30,7 +30,6 @@ export default function History({ currentUser }) {
   const [facultyBookings, setFacultyBookings] = useState([]);
   const [archiveList,     setArchiveList]     = useState([]);
   const [loading,         setLoading]         = useState(false);
-  const [searchQ,         setSearchQ]         = useState('');
   const [expandedRosters, setExpandedRosters] = useState({});
   const [loadingRosters,  setLoadingRosters]  = useState({});
 
@@ -38,25 +37,36 @@ export default function History({ currentUser }) {
     api.getBookings()
       .then(all => {
         if (!Array.isArray(all)) return;
-        const myB = (isFaculty && currentUser?.name)
-          ? all.filter(b => b.facultyName?.toLowerCase().includes(currentUser.name.toLowerCase()))
-          : all;
-        setFacultyBookings(myB.slice(0, 30));
+        const myName = (currentUser?.name || '').trim().toLowerCase();
+        const myB = myName
+          ? all.filter(b => {
+              const bName = (b.facultyName || b.coordinator || '').trim().toLowerCase();
+              return bName === myName;
+            })
+          : [];
+        setFacultyBookings(myB);
       })
       .catch(() => {});
-  }, [currentUser, isFaculty]);
+  }, [currentUser]);
 
   const fetchArchive = async () => {
     setLoading(true);
     try {
-      const data = await api.getArchive({ q: searchQ });
-      setArchiveList(data || []);
+      const myName = (currentUser?.name || '').trim();
+      // Always filter archive by the current faculty's name
+      const data = await api.getArchive({ q: myName });
+      // Client-side guard: only show records that belong to this faculty
+      const filtered = (data || []).filter(item => {
+        const itemName = (item.facultyName || '').trim().toLowerCase();
+        return !myName || itemName === myName.toLowerCase();
+      });
+      setArchiveList(filtered);
     } catch {} finally { setLoading(false); }
   };
 
   useEffect(() => {
     if (activeTab === 'collegeArchive') fetchArchive();
-  }, [activeTab, searchQ]);
+  }, [activeTab, currentUser]);
 
   const loadRoster = async (id) => {
     if (expandedRosters[id] !== undefined) {
@@ -252,11 +262,7 @@ export default function History({ currentUser }) {
       {/* ── College Archive ── */}
       {activeTab === 'collegeArchive' && (
         <div className="animate-fade-in">
-          <div style={{ position: 'relative', marginBottom: 14 }}>
-            <input className="app-input" type="text" placeholder="Search events or faculty…"
-              value={searchQ} onChange={e => setSearchQ(e.target.value)} style={{ paddingLeft: 38 }} />
-            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-          </div>
+          {/* No search box — faculty only sees their own records */}
 
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -265,8 +271,8 @@ export default function History({ currentUser }) {
           ) : archiveList.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">📚</div>
-              <div className="empty-state-title">No archive records</div>
-              <div className="empty-state-desc">College-wide attendance records will appear here.</div>
+              <div className="empty-state-title">No attendance records</div>
+              <div className="empty-state-desc">Your event attendance records will appear here after an event concludes.</div>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
