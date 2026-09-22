@@ -1,5 +1,5 @@
-// Kirti Admin PWA Service Worker v3
-const CACHE_NAME = 'kirti-admin-pwa-v3';
+// Kirti Admin PWA Service Worker v4
+const CACHE_NAME = 'kirti-admin-pwa-v4';
 const STATIC_ASSETS = [
   '/Logo.png',
   '/icon.svg',
@@ -24,9 +24,20 @@ self.addEventListener('activate', (e) => {
           }
         })
       );
+    }).then(() => {
+      return self.clients.claim();
+    }).then(() => {
+      return self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => client.postMessage({ type: 'SW_ACTIVATED', cache: CACHE_NAME }));
+      });
     })
   );
-  self.clients.claim();
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (e) => {
@@ -52,7 +63,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // 3. Stale-while-revalidate / cache-first for static assets
+  // 3. Dynamic cache for static assets (fonts, icons, etc.)
   e.respondWith(
     caches.match(e.request).then((cached) => {
       if (cached) {

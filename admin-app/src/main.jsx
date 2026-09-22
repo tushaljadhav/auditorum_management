@@ -117,6 +117,13 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .register('/sw.js')
       .then((reg) => {
+        // Check for updates when user returns to the app
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            reg.update().catch(() => {});
+          }
+        });
+
         reg.onupdatefound = () => {
           const installingWorker = reg.installing;
           if (installingWorker) {
@@ -138,6 +145,8 @@ if ('serviceWorker' in navigator) {
     window.location.reload();
   });
 }
+
+window.__APP_MOUNTED__ = true;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

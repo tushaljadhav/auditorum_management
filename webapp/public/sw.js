@@ -1,58 +1,87 @@
-// Kirti Auditorium PWA Service Worker
-const CACHE_NAME = 'kirti-audit-pwa-v1';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/icon.svg'
+// Kirti Auditorium Faculty PWA Service Worker v3
+const CACHE_NAME = 'kirti-audit-pwa-v3';
+const STATIC_ASSETS = [
+  '/Logo.png',
+  '/icon.svg',
+  '/manifest.webmanifest'
 ];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
-        console.warn('SW pre-cache warning:', err);
-      });
-    })
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            console.log('[SW] Clearing old cache:', key);
+            return caches.delete(key);
+          }
+        })
       );
+    }).then(() => {
+      return self.clients.claim();
+    }).then(() => {
+      return self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => client.postMessage({ type: 'SW_ACTIVATED', cache: CACHE_NAME }));
+      });
     })
   );
-  self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  // Always fetch dynamic API requests over the network
-  if (event.request.url.includes('/api/')) {
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+
+  // 1. Never intercept or cache API requests
+  if (url.pathname.startsWith('/api/')) return;
+
+  // 2. Network-First strategy for HTML document navigation
+  // Ensures fresh HTML with latest bundle hashes is always loaded
+  if (e.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    e.respondWith(
+      fetch(e.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(e.request).then((cached) => cached || caches.match('/')))
+    );
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch in background to update cache
-        fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
+  // 3. Dynamic cache for static assets (fonts, icons, etc.)
+  e.respondWith(
+    caches.match(e.request).then((cached) => {
+      if (cached) {
+        fetch(e.request)
+          .then((networkRes) => {
+            if (networkRes && networkRes.status === 200) {
+              caches.open(CACHE_NAME).then((cache) => cache.put(e.request, networkRes));
             }
           })
           .catch(() => {});
-        return cachedResponse;
+        return cached;
       }
-      return fetch(event.request).catch(() => {
-        // Return cached index if offline navigation
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
+      return fetch(e.request).then((networkRes) => {
+        if (networkRes && networkRes.status === 200) {
+          const clone = networkRes.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
         }
+        return networkRes;
       });
     })
   );
