@@ -29,18 +29,18 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
   // Edit Profile Form State
   const [editForm, setEditForm] = useState({
     name: currentUser?.name || '',
+    department: currentUser?.departmentName || '',
+    mobile: currentUser?.mobile || '',
     email: currentUser?.email || '',
-    department: currentUser?.departmentName || currentUser?.departmentId || '',
-    designation: currentUser?.designation || '',
   });
 
   useEffect(() => {
     if (currentUser) {
       setEditForm({
         name: currentUser.name || '',
+        department: currentUser.departmentName || '',
+        mobile: currentUser.mobile || '',
         email: currentUser.email || '',
-        department: currentUser.departmentName || currentUser.departmentId || '',
-        designation: currentUser.designation || '',
       });
     }
   }, [currentUser]);
@@ -70,13 +70,24 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
     e.preventDefault();
     if (!currentUser) return;
 
+    if (!editForm.name.trim()) {
+      showCustomToast('Full Name is required', 'warning');
+      return;
+    }
+
+    const cleanMobile = (editForm.mobile || '').replace(/[^0-9]/g, '').slice(0, 10);
+    if (cleanMobile && cleanMobile.length < 10) {
+      showCustomToast('Please enter a valid 10-digit phone number', 'warning');
+      return;
+    }
+
     const updatedUser = {
       ...currentUser,
-      name: editForm.name.trim() || currentUser.name,
+      name: editForm.name.trim(),
+      departmentName: editForm.department.trim() || 'General',
+      departmentId: editForm.department.trim() || 'General',
+      mobile: cleanMobile || currentUser.mobile || '',
       email: editForm.email.trim(),
-      departmentId: editForm.department.trim() || 'Campus Events',
-      departmentName: editForm.department.trim() || 'Campus Events',
-      designation: editForm.designation.trim() || 'Faculty',
     };
 
     sessionManager.setUser(updatedUser);
@@ -184,25 +195,18 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Phone size={13} color="rgba(196,181,253,0.7)" style={{ flexShrink: 0 }} />
               <span style={{ fontSize: 11, color: 'rgba(196,181,253,0.9)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {currentUser.mobile || '—'}
+                {currentUser.mobile || 'No phone set'}
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Building2 size={13} color="rgba(196,181,253,0.7)" style={{ flexShrink: 0 }} />
               <span style={{ fontSize: 11, color: 'rgba(196,181,253,0.9)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {currentUser.departmentName || currentUser.departmentId || 'Campus Events'}
+                {currentUser.departmentName || 'General'}
               </span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Briefcase size={13} color="rgba(196,181,253,0.7)" style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: 'rgba(196,181,253,0.9)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {currentUser.designation || (currentUser.role === 'admin' ? 'Admin' : 'Faculty')}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: 'span 2' }}>
               <Mail size={13} color="rgba(196,181,253,0.7)" style={{ flexShrink: 0 }} />
               <span style={{ fontSize: 11, color: 'rgba(196,181,253,0.9)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {currentUser.email || 'No email set'}
@@ -552,13 +556,14 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
 
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-secondary)', display: 'block', marginBottom: 5 }}>
-                    DESIGNATION
+                    PHONE NO
                   </label>
                   <input
-                    type="text"
-                    placeholder="e.g. Assistant Professor, HOD"
-                    value={editForm.designation}
-                    onChange={e => setEditForm({ ...editForm, designation: e.target.value })}
+                    type="tel"
+                    placeholder="10-digit mobile number"
+                    maxLength={10}
+                    value={editForm.mobile}
+                    onChange={e => setEditForm({ ...editForm, mobile: e.target.value.replace(/[^0-9]/g, '').slice(0, 10) })}
                     style={{
                       width: '100%', height: 42, padding: '0 12px',
                       borderRadius: 8, border: '1.5px solid var(--border)',
