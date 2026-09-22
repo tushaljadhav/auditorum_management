@@ -26,11 +26,21 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
     return localStorage.getItem('kirti_setting_haptics') !== 'false';
   });
 
+  // Helper: extract clean 10-digit mobile (strips +91 / 0091 / leading 91)
+  const strip10Digits = (raw) => {
+    const digits = String(raw || '').replace(/[^0-9]/g, '');
+    // If 12 digits and starts with 91, remove country code
+    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+    // If 11 digits and starts with 0, remove leading 0
+    if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+    return digits.slice(0, 10);
+  };
+
   // Edit Profile Form State
   const [editForm, setEditForm] = useState({
     name: currentUser?.name || '',
     department: currentUser?.departmentName || '',
-    mobile: currentUser?.mobile || '',
+    mobile: strip10Digits(currentUser?.mobile),
     email: currentUser?.email || '',
   });
 
@@ -39,7 +49,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       setEditForm({
         name: currentUser.name || '',
         department: currentUser.departmentName || '',
-        mobile: currentUser.mobile || '',
+        mobile: strip10Digits(currentUser.mobile),
         email: currentUser.email || '',
       });
     }
@@ -94,7 +104,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       return;
     }
 
-    const cleanMobile = (editForm.mobile || '').replace(/[^0-9]/g, '').slice(0, 10);
+    const cleanMobile = strip10Digits(editForm.mobile);
     if (cleanMobile && cleanMobile.length < 10) {
       showCustomToast('Please enter a valid 10-digit phone number', 'warning');
       return;

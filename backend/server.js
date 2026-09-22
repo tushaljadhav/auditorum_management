@@ -472,10 +472,15 @@ app.patch('/api/faculty/:id/profile', async (req, res) => {
   }
 
   let cleanMobile = mobile ? String(mobile).replace(/[^0-9]/g, '') : '';
-  if (cleanMobile && !/^[6-9]\d{9}$/.test(cleanMobile.slice(-10))) {
+  // Strip country code if present: +91XXXXXXXXXX = 12 digits starting with 91
+  if (cleanMobile.length === 12 && cleanMobile.startsWith('91')) cleanMobile = cleanMobile.slice(2);
+  // Strip leading 0 if present
+  if (cleanMobile.length === 11 && cleanMobile.startsWith('0')) cleanMobile = cleanMobile.slice(1);
+  // Keep only last 10 digits
+  if (cleanMobile.length > 10) cleanMobile = cleanMobile.slice(-10);
+  if (cleanMobile && !/^[6-9]\d{9}$/.test(cleanMobile)) {
     return res.status(400).json({ error: 'Invalid mobile number format.' });
   }
-  if (cleanMobile.length > 10) cleanMobile = cleanMobile.slice(-10);
   const formattedMobile = cleanMobile ? `+91 ${cleanMobile.substring(0, 5)} ${cleanMobile.substring(5)}` : (mobile || '');
 
   try {
