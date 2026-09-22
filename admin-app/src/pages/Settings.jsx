@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Download, Upload, Database, Shield,
-  Users, Plus, Trash2, X, ExternalLink, LogOut, UserCheck
+  Users, Plus, Trash2, X, ExternalLink, LogOut, UserCheck, Smartphone
 } from 'lucide-react';
 import { adminApi } from '../api/client';
 import Swal from 'sweetalert2';
@@ -34,6 +34,51 @@ export default function Settings({ currentUser, onLogout }) {
       timer: 1500,
       showConfirmButton: false,
     });
+  };
+
+  const handleInstallApp = async () => {
+    const prompt = window.__PWA_DEFERRED_PROMPT__;
+    if (prompt) {
+      prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+      if (outcome === 'accepted') {
+        Swal.fire({
+          icon: 'success',
+          title: 'Installed!',
+          text: 'Kirti Admin app has been added to your home screen.',
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      }
+      window.__PWA_DEFERRED_PROMPT__ = null;
+    } else {
+      const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+      Swal.fire({
+        title: 'Download / Install App',
+        html: isIOS ? `
+          <div style="text-align:left; font-size:13px; line-height:1.6; color:#475569;">
+            <p><strong>To install on iPhone / iPad:</strong></p>
+            <ol style="padding-left:18px; margin-top:8px;">
+              <li>Tap the <strong>Share button (⎋)</strong> at the bottom of Safari.</li>
+              <li>Scroll down and select <strong>'Add to Home Screen' (➕)</strong>.</li>
+              <li>Tap <strong>Add</strong> in the top-right corner!</li>
+            </ol>
+          </div>
+        ` : `
+          <div style="text-align:left; font-size:13px; line-height:1.6; color:#475569;">
+            <p><strong>To install on Android or PC:</strong></p>
+            <ol style="padding-left:18px; margin-top:8px;">
+              <li>Tap your browser menu <strong>(3 dots ⋮ in top-right)</strong>.</li>
+              <li>Tap <strong>'Install app'</strong> or <strong>'Add to Home screen'</strong>.</li>
+              <li>Confirm to add the app icon to your home screen!</li>
+            </ol>
+          </div>
+        `,
+        icon: 'info',
+        confirmButtonText: 'Understood',
+        confirmButtonColor: '#4F46E5',
+      });
+    }
   };
 
   const handleFileSelect = (e) => {
@@ -270,6 +315,54 @@ export default function Settings({ currentUser, onLogout }) {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="admin-card" style={{ padding: '16px', background: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)', border: '1px solid #C7D2FE' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '12px',
+              background: '#4F46E5',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Smartphone size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#1E1B4B' }}>
+                Download Admin App
+              </div>
+              <div style={{ fontSize: 11, color: '#4338CA' }}>
+                Install as Home Screen app for faster access
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleInstallApp}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 10,
+              background: '#4F46E5',
+              border: 'none',
+              color: '#FFFFFF',
+              fontSize: 12,
+              fontWeight: 750,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+              flexShrink: 0
+            }}
+          >
+            <Download size={13} /> Install
+          </button>
         </div>
       </div>
 

@@ -45,11 +45,17 @@ export default function App() {
   };
 
   if (!currentUser) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <>
+        <InstallPrompt />
+        <Login onLoginSuccess={handleLoginSuccess} />
+      </>
+    );
   }
 
   return (
     <>
+      <InstallPrompt />
       <Header
         currentUser={currentUser}
         onLogout={handleLogout}

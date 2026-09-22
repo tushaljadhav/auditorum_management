@@ -3,6 +3,8 @@
   "short_name": "Kirti Admin",
   "description": "College Auditorium Master Admin Panel & Operations App for Kirti M. Doongursee College",
   "start_url": "/",
+  "id": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#F8FAFC",
@@ -10,16 +12,34 @@
   "categories": ["education", "productivity", "management"],
   "icons": [
     {
-      "src": "/Logo.png",
-      "sizes": "192x192 512x512",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/Logo.png",
+      "sizes": "222x227",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon.svg",
-      "sizes": "192x192 512x512",
+      "sizes": "512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "shortcuts": [
