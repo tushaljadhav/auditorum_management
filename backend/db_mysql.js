@@ -63,6 +63,9 @@ const pool = mysql.createPool({
   try {
     await pool.query('ALTER TABLE bookings ADD COLUMN sessionPin VARCHAR(10) NULL');
   } catch (err) {}
+  try {
+    await pool.query('ALTER TABLE bookings ADD COLUMN sessionRadius INT DEFAULT 100 NULL');
+  } catch (err) {}
 
   try {
     await pool.query(`
@@ -205,9 +208,11 @@ const dbMysql = {
   getFaculty: async () => {
     return await query(`
       SELECT f.*, d.name as designationName, 
+             COALESCE(dept.name, f.departmentId, '') as departmentName,
              CONCAT(IFNULL(d.name, ''), ' ', f.name) as fullName 
       FROM faculty f
       LEFT JOIN designations d ON f.designationId = d.id
+      LEFT JOIN departments dept ON f.departmentId = dept.id
     `);
   },
   addFaculty: async (f) => {
@@ -222,7 +227,16 @@ const dbMysql = {
       f.designationId || null,
       status
     ]);
-    return { id, ...f, status };
+    const rows = await query(`
+      SELECT f.*, d.name as designationName, 
+             COALESCE(dept.name, f.departmentId, '') as departmentName,
+             CONCAT(IFNULL(d.name, ''), ' ', f.name) as fullName 
+      FROM faculty f
+      LEFT JOIN designations d ON f.designationId = d.id
+      LEFT JOIN departments dept ON f.departmentId = dept.id
+      WHERE f.id = ?
+    `, [id]);
+    return rows[0] || { id, ...f, status };
   },
   updateFaculty: async (id, fields) => {
     await query('UPDATE faculty SET name = ?, email = ?, mobile = ?, departmentId = ?, designationId = ? WHERE id = ?', [
@@ -235,9 +249,11 @@ const dbMysql = {
     ]);
     const rows = await query(`
       SELECT f.*, d.name as designationName, 
+             COALESCE(dept.name, f.departmentId, '') as departmentName,
              CONCAT(IFNULL(d.name, ''), ' ', f.name) as fullName 
       FROM faculty f
       LEFT JOIN designations d ON f.designationId = d.id
+      LEFT JOIN departments dept ON f.departmentId = dept.id
       WHERE f.id = ?
     `, [id]);
     return rows[0] || null;
@@ -246,9 +262,11 @@ const dbMysql = {
     await query('UPDATE faculty SET status = ? WHERE id = ?', [status, id]);
     const rows = await query(`
       SELECT f.*, d.name as designationName, 
+             COALESCE(dept.name, f.departmentId, '') as departmentName,
              CONCAT(IFNULL(d.name, ''), ' ', f.name) as fullName 
       FROM faculty f
       LEFT JOIN designations d ON f.designationId = d.id
+      LEFT JOIN departments dept ON f.departmentId = dept.id
       WHERE f.id = ?
     `, [id]);
     return rows[0] || null;
@@ -259,9 +277,11 @@ const dbMysql = {
     if (!clean10) return null;
     const rows = await query(`
       SELECT f.*, d.name as designationName, 
+             COALESCE(dept.name, f.departmentId, '') as departmentName,
              CONCAT(IFNULL(d.name, ''), ' ', f.name) as fullName 
       FROM faculty f
       LEFT JOIN designations d ON f.designationId = d.id
+      LEFT JOIN departments dept ON f.departmentId = dept.id
     `);
     return rows.find(f => {
       if (!f.mobile) return false;

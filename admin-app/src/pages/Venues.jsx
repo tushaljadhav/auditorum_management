@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   MapPin, Plus, Edit2, Trash2, ShieldAlert,
-  CheckCircle2, Navigation, X, Users, Building2,
+  CheckCircle2, X, Users, Building2,
   Lock, Unlock
 } from 'lucide-react';
 import { adminApi } from '../api/client';
@@ -15,15 +15,11 @@ export default function Venues() {
   const [maintModalOpen, setMaintModalOpen] = useState(false);
   const [targetVenue, setTargetVenue] = useState(null);
   const [maintReason, setMaintReason] = useState('');
-  const [capturingGps, setCapturingGps] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
     capacity: '',
     location: '',
-    latitude: '',
-    longitude: '',
-    radius: '50',
     status: 'Active',
   });
 
@@ -49,9 +45,6 @@ export default function Venues() {
       name: '',
       capacity: '',
       location: '',
-      latitude: '19.0222',
-      longitude: '72.8304',
-      radius: '100',
       status: 'Active',
     });
     setModalOpen(true);
@@ -63,36 +56,9 @@ export default function Venues() {
       name: v.name || '',
       capacity: v.capacity != null ? v.capacity.toString() : '',
       location: v.location || '',
-      latitude: v.latitude != null ? v.latitude.toString() : '',
-      longitude: v.longitude != null ? v.longitude.toString() : '',
-      radius: v.radius != null ? v.radius.toString() : '50',
       status: v.status || 'Active',
     });
     setModalOpen(true);
-  };
-
-  const handleCaptureGps = () => {
-    if (!navigator.geolocation) {
-      Swal.fire({ icon: 'error', title: 'GPS Not Supported', text: 'Geolocation is not supported.' });
-      return;
-    }
-    setCapturingGps(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm(p => ({
-          ...p,
-          latitude: pos.coords.latitude.toFixed(6),
-          longitude: pos.coords.longitude.toFixed(6),
-        }));
-        setCapturingGps(false);
-        Swal.fire({ icon: 'success', title: 'GPS Captured', timer: 1000, showConfirmButton: false });
-      },
-      () => {
-        setCapturingGps(false);
-        Swal.fire({ icon: 'error', title: 'GPS Error', text: 'Could not fetch location.' });
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
   };
 
   const handleSaveVenue = async (e) => {
@@ -105,9 +71,9 @@ export default function Venues() {
     const payload = {
       ...form,
       capacity: parseInt(form.capacity, 10),
-      latitude: form.latitude ? parseFloat(form.latitude) : null,
-      longitude: form.longitude ? parseFloat(form.longitude) : null,
-      radius: parseInt(form.radius, 10) || 50,
+      latitude: editingVenue?.latitude ?? null,
+      longitude: editingVenue?.longitude ?? null,
+      radius: editingVenue?.radius ?? 100,
     };
 
     try {
@@ -403,70 +369,18 @@ export default function Venues() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Geofence Radius (m)</label>
-                  <input
-                    type="number"
-                    placeholder="100"
-                    value={form.radius}
-                    onChange={e => setForm({ ...form, radius: e.target.value })}
-                    className="form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Location / Floor</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Ground Floor, Main Wing"
-                  value={form.location}
-                  onChange={e => setForm({ ...form, location: e.target.value })}
-                  className="form-input"
-                />
-              </div>
-
-              <div style={{ background: '#F8FAFC', padding: 12, borderRadius: 12, border: '1px solid var(--border)', marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 750, color: 'var(--text-primary)' }}>GPS Coordinates (Geofence)</span>
-                  <button
-                    type="button"
-                    onClick={handleCaptureGps}
-                    disabled={capturingGps}
-                    style={{
-                      background: 'var(--primary-light)',
-                      border: '1px solid var(--primary-border)',
-                      color: 'var(--primary)',
-                      borderRadius: 6,
-                      padding: '3px 8px',
-                      fontSize: 10,
-                      fontWeight: 750,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {capturingGps ? 'Capturing...' : '📍 Use Phone GPS'}
-                  </button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <label className="form-label">Location / Floor</label>
                   <input
                     type="text"
-                    placeholder="Lat (19.0222)"
-                    value={form.latitude}
-                    onChange={e => setForm({ ...form, latitude: e.target.value })}
+                    placeholder="e.g. Ground Floor, Main Wing"
+                    value={form.location}
+                    onChange={e => setForm({ ...form, location: e.target.value })}
                     className="form-input"
-                    style={{ height: 36, fontSize: 12 }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Long (72.8304)"
-                    value={form.longitude}
-                    onChange={e => setForm({ ...form, longitude: e.target.value })}
-                    className="form-input"
-                    style={{ height: 36, fontSize: 12 }}
                   />
                 </div>
               </div>
 
-              <button type="submit" className="btn-primary" style={{ width: '100%', height: 46 }}>
+              <button type="submit" className="btn-primary" style={{ width: '100%', height: 46, marginTop: 8 }}>
                 {editingVenue ? 'Save Changes' : 'Create Hall'}
               </button>
             </form>

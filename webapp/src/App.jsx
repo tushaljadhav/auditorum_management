@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { sessionManager } from './api/client';
+import { sessionManager, api } from './api/client';
 import Splash from './pages/Splash';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -27,6 +27,9 @@ export default function App() {
 
   // Check URL query parameters on mount — Default first page is always 'login'
   useEffect(() => {
+    // Trigger background warm-up immediately so backend is awake & cached
+    api.warmUp();
+
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
     if (tabParam && VALID_TABS.includes(tabParam)) {

@@ -30,7 +30,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
   const [editForm, setEditForm] = useState({
     name: currentUser?.name || '',
     email: currentUser?.email || '',
-    department: currentUser?.departmentId || '',
+    department: currentUser?.departmentName || currentUser?.departmentId || '',
     designation: currentUser?.designation || '',
   });
 
@@ -39,7 +39,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       setEditForm({
         name: currentUser.name || '',
         email: currentUser.email || '',
-        department: currentUser.departmentId || '',
+        department: currentUser.departmentName || currentUser.departmentId || '',
         designation: currentUser.designation || '',
       });
     }
@@ -75,6 +75,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
       name: editForm.name.trim() || currentUser.name,
       email: editForm.email.trim(),
       departmentId: editForm.department.trim() || 'Campus Events',
+      departmentName: editForm.department.trim() || 'Campus Events',
       designation: editForm.designation.trim() || 'Faculty',
     };
 
@@ -190,7 +191,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Building2 size={13} color="rgba(196,181,253,0.7)" style={{ flexShrink: 0 }} />
               <span style={{ fontSize: 11, color: 'rgba(196,181,253,0.9)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {currentUser.departmentId || 'Campus Events'}
+                {currentUser.departmentName || currentUser.departmentId || 'Campus Events'}
               </span>
             </div>
 

@@ -71,6 +71,20 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// --- Automated Keep-Alive to Prevent Render Free-Tier Spin-down ---
+const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || 'https://auditorium-backend-j1we.onrender.com';
+const KEEP_ALIVE_INTERVAL = 13 * 60 * 1000; // 13 minutes (Render spins down after 15 mins)
+setInterval(() => {
+  try {
+    const https = require('https');
+    https.get(`${RENDER_EXTERNAL_URL}/api/health`, (resp) => {
+      console.log(`[KeepAlive] Pinged ${RENDER_EXTERNAL_URL}/api/health (Status: ${resp.statusCode})`);
+    }).on('error', (err) => {
+      // transient ping error
+    });
+  } catch (e) {}
+}, KEEP_ALIVE_INTERVAL);
+
 // --- Authentication Middleware ---
 const requireAuth = (req, res, next) => {
   if (req.session && req.session.userId) {
@@ -177,6 +191,7 @@ app.post('/api/auth/faculty-login', async (req, res) => {
         email: faculty.email,
         mobile: faculty.mobile,
         departmentId: faculty.departmentId,
+        departmentName: faculty.departmentName || faculty.departmentId || '',
         designationName: faculty.designationName || 'Faculty',
         role: 'faculty',
         status: faculty.status
@@ -224,8 +239,8 @@ app.get('/api/auth/session', (req, res) => {
   }
 });
 
-// --- Dashboard Stats API ---
-app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
+// --- Dashboard Stats API (shared by Desktop & Mobile Admin) ---
+app.get(['/api/dashboard/stats', '/api/admin/stats'], async (req, res) => {
   try {
     const [bookings, faculty, venues, departments] = await Promise.all([
       dbMysql.getBookings(),
@@ -273,12 +288,29 @@ app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
   }
 });
 
+// --- In-Memory Caches for Static High-Frequency Lookups ---
+let departmentsCache = null;
+let departmentsCacheTime = 0;
+let venuesCache = null;
+let venuesCacheTime = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+const invalidateDepartmentsCache = () => { departmentsCache = null; departmentsCacheTime = 0; };
+const invalidateVenuesCache = () => { venuesCache = null; venuesCacheTime = 0; };
+
 // --- Departments APIs ---
 app.get('/api/departments', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
   try {
+    if (departmentsCache && (Date.now() - departmentsCacheTime < CACHE_TTL_MS)) {
+      return res.json(departmentsCache);
+    }
     const depts = await dbMysql.getDepartments();
+    departmentsCache = depts;
+    departmentsCacheTime = Date.now();
     res.json(depts);
   } catch (err) {
+    if (departmentsCache) return res.json(departmentsCache);
     res.status(500).json({ error: err.message });
   }
 });
@@ -288,6 +320,7 @@ app.post('/api/departments', requireAuth, async (req, res) => {
   if (!name) return res.status(400).json({ error: 'Department name is required' });
   try {
     const newDept = await dbMysql.addDepartment(name);
+    invalidateDepartmentsCache();
     res.status(201).json(newDept);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -300,6 +333,7 @@ app.put('/api/departments/:id', requireAuth, async (req, res) => {
   try {
     const updated = await dbMysql.updateDepartment(req.params.id, name);
     if (!updated) return res.status(404).json({ error: 'Department not found' });
+    invalidateDepartmentsCache();
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -309,6 +343,7 @@ app.put('/api/departments/:id', requireAuth, async (req, res) => {
 app.delete('/api/departments/:id', requireAuth, async (req, res) => {
   try {
     const success = await dbMysql.deleteDepartment(req.params.id);
+    invalidateDepartmentsCache();
     res.json({ success });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -584,10 +619,17 @@ app.put('/api/faculty/:id/status', requireAuth, async (req, res) => {
 
 // --- Venues APIs ---
 app.get('/api/venues', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
   try {
+    if (venuesCache && (Date.now() - venuesCacheTime < CACHE_TTL_MS)) {
+      return res.json(venuesCache);
+    }
     const venues = await dbMysql.getVenues();
+    venuesCache = venues;
+    venuesCacheTime = Date.now();
     res.json(venues);
   } catch (err) {
+    if (venuesCache) return res.json(venuesCache);
     res.status(500).json({ error: err.message });
   }
 });
@@ -608,6 +650,7 @@ app.post('/api/venues', requireAuth, async (req, res) => {
       radius: radius ? Number(radius) : 50,
       status: status || 'Active'
     });
+    invalidateVenuesCache();
     res.status(201).json(newVenue);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -624,6 +667,7 @@ app.put('/api/venues/:id', requireAuth, async (req, res) => {
       radius: req.body.radius !== undefined ? (req.body.radius !== '' ? Number(req.body.radius) : 50) : undefined
     });
     if (!updated) return res.status(404).json({ error: 'Venue not found' });
+    invalidateVenuesCache();
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -633,6 +677,7 @@ app.put('/api/venues/:id', requireAuth, async (req, res) => {
 app.delete('/api/venues/:id', requireAuth, async (req, res) => {
   try {
     const success = await dbMysql.deleteVenue(req.params.id);
+    invalidateVenuesCache();
     res.json({ success });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1093,8 +1138,8 @@ app.delete('/api/bookings/:id', requireAuth, async (req, res) => {
   }
 });
 
-// --- Admin Users APIs ---
-app.get('/api/users', requireAuth, async (req, res) => {
+// --- Admin Users APIs (shared by Desktop & Mobile Admin) ---
+app.get(['/api/users', '/api/admin/users'], requireAuth, async (req, res) => {
   try {
     const users = await dbMysql.getUsers();
     // Return users (omit passwords in output)
@@ -1105,7 +1150,7 @@ app.get('/api/users', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/users', requireAuth, async (req, res) => {
+app.post(['/api/users', '/api/admin/users'], requireAuth, async (req, res) => {
   const { username, password, name } = req.body;
   if (!username || !password || !name) {
     return res.status(400).json({ error: 'Username, password, and name are required' });
@@ -1124,7 +1169,7 @@ app.post('/api/users', requireAuth, async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', requireAuth, async (req, res) => {
+app.put(['/api/users/:id', '/api/admin/users/:id'], requireAuth, async (req, res) => {
   try {
     const updated = await dbMysql.updateUser(req.params.id, req.body);
     if (!updated) return res.status(404).json({ error: 'User not found' });
@@ -1135,7 +1180,7 @@ app.put('/api/users/:id', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', requireAuth, async (req, res) => {
+app.delete(['/api/users/:id', '/api/admin/users/:id'], requireAuth, async (req, res) => {
   try {
     const users = await dbMysql.getUsers();
     if (users.length <= 1) {
@@ -1210,11 +1255,13 @@ app.post('/api/attendance/create-instant-session', async (req, res) => {
     // Update with GPS + PIN + sessionRadius
     const finalLat = (latitude !== undefined && latitude !== null && latitude !== '') ? Number(latitude) : null;
     const finalLon = (longitude !== undefined && longitude !== null && longitude !== '') ? Number(longitude) : null;
+    const finalRadius = (radius !== undefined && radius !== null && radius !== '') ? Number(radius) : 100;
 
     await dbMysql.updateBooking(newBooking.id, {
       sessionLatitude: finalLat,
       sessionLongitude: finalLon,
-      sessionPin: sessionPin
+      sessionPin: sessionPin,
+      sessionRadius: finalRadius
     });
 
     // Return enriched session
@@ -1223,6 +1270,8 @@ app.post('/api/attendance/create-instant-session', async (req, res) => {
       sessionLatitude: finalLat,
       sessionLongitude: finalLon,
       sessionPin: sessionPin,
+      sessionRadius: finalRadius,
+      radius: finalRadius,
       venueName: (roomName || 'Live Session').toString().trim(),
       presentCount: 0,
       secondsRemaining: winMins * 60
@@ -1255,7 +1304,7 @@ function getDistance(lat1, lon1, lat2, lon2) {
 
 // Start Attendance (Faculty Side)
 app.post('/api/bookings/:id/start-attendance', async (req, res) => {
-  const { windowMins, latitude, longitude, pin } = req.body;
+  const { windowMins, latitude, longitude, pin, radius } = req.body;
   try {
     const bookings = await dbMysql.getBookings();
     const booking = bookings.find(b => b.id === req.params.id);
@@ -1276,6 +1325,17 @@ app.post('/api/bookings/:id/start-attendance', async (req, res) => {
       longitude !== undefined && longitude !== null && longitude !== '' ? Number(longitude) : null,
       sessionPin
     );
+
+    if (radius !== undefined && radius !== null && radius !== '') {
+      await dbMysql.updateBooking(req.params.id, {
+        sessionRadius: Number(radius)
+      });
+      if (updatedBooking) {
+        updatedBooking.sessionRadius = Number(radius);
+        updatedBooking.radius = Number(radius);
+      }
+    }
+
     res.json(updatedBooking);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1537,7 +1597,9 @@ app.post('/api/attendance/mark', async (req, res) => {
     }
 
     let calculatedDistance = 0;
-    const allowedRadius = 100; // Universal 100-meter geofence
+    const allowedRadius = (booking.sessionRadius && Number(booking.sessionRadius) > 0)
+      ? Number(booking.sessionRadius)
+      : (booking.radius && Number(booking.radius) > 0 ? Number(booking.radius) : 100);
 
     if (anchorLat !== null && anchorLon !== null && !isNaN(anchorLat) && !isNaN(anchorLon) && anchorLat !== 0 && anchorLon !== 0) {
       // Location is required for student if anchor is set
@@ -1554,11 +1616,11 @@ app.post('/api/attendance/mark', async (req, res) => {
 
       calculatedDistance = getDistance(studentLat, studentLon, anchorLat, anchorLon);
 
-      // We allow up to 100 meters (with a 25m buffer for indoor GPS phone drift)
-      const maxAllowedMeters = allowedRadius + 25; // 125m tolerance for indoor classroom drift
+      // We allow up to chosen radius (with a 25m buffer for indoor GPS phone drift)
+      const maxAllowedMeters = allowedRadius + 25; // tolerance for indoor classroom drift
       if (calculatedDistance > maxAllowedMeters) {
         return res.status(400).json({
-          error: `Proxy Protection: You are outside the 100m classroom/auditorium radius. Distance: ${Math.round(calculatedDistance)}m from ${anchorSource}. (Allowed: ≤100m)`
+          error: `Proxy Protection: You are outside the ${allowedRadius}m classroom/auditorium radius. Distance: ${Math.round(calculatedDistance)}m from ${anchorSource}. (Allowed: ≤${allowedRadius}m)`
         });
       }
     }
@@ -1773,58 +1835,10 @@ app.post('/api/admin/restore', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/admin/stats', async (req, res) => {
-  try {
-    const [bookings, faculty, venues, departments] = await Promise.all([
-      dbMysql.getBookings(),
-      dbMysql.getFaculty(),
-      dbMysql.getVenues(),
-      dbMysql.getDepartments()
-    ]);
-    res.json({
-      totalBookings: bookings.length,
-      totalVenues: venues.length,
-      totalFaculty: faculty.length,
-      totalDepartments: departments.length,
-      venueStats: venues.map(v => ({ id: v.id, name: v.name, count: bookings.filter(b => b.venueId === v.id).length })),
-      deptStats: [...new Set(bookings.map(b => b.departmentName).filter(Boolean))].map(name => ({ id: name, name, count: bookings.filter(b => b.departmentName === name).length }))
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.get('/api/attendance/session/:id', async (req, res) => {
   try {
     const records = await dbMysql.getAttendance(req.params.id);
     res.json({ records, count: records.length });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/admin/users', requireAuth, async (req, res) => {
-  try {
-    const users = await dbMysql.getUsers();
-    res.json(users.map(({ password, ...u }) => u));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/admin/users', requireAuth, async (req, res) => {
-  try {
-    const newUser = await dbMysql.addUser(req.body);
-    res.status(201).json(newUser);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/admin/users/:id', requireAuth, async (req, res) => {
-  try {
-    const success = await dbMysql.deleteUser(req.params.id);
-    res.json({ success });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

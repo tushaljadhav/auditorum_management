@@ -1,21 +1,28 @@
 {
   "name": "auditorium-management",
   "version": "1.0.0",
+  "private": true,
   "description": "College Auditorium Management System built with React and Node.js",
-  "main": "backend/server.js",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "webapp",
+    "admin-app"
+  ],
   "scripts": {
-    "install-backend": "cd backend && npm install",
-    "install-frontend": "cd frontend && npm install",
-    "install-webapp": "cd webapp && npm install",
-    "install-admin-app": "cd admin-app && npm install",
-    "install-all": "npm install && npm run install-backend && npm run install-frontend && npm run install-webapp && npm run install-admin-app",
-    "server": "cd backend && npm start",
-    "client": "cd frontend && npm run dev",
-    "webapp": "cd webapp && npm run dev",
-    "admin-app": "cd admin-app && npm run dev",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "npm run start --workspace=backend",
+    "client": "npm run dev --workspace=frontend",
+    "webapp": "npm run dev --workspace=webapp",
+    "admin-app": "npm run dev --workspace=admin-app",
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,cyan\" \"npm run server\" \"npm run client\"",
     "user-admin": "concurrently -n \"SERVER,USER,ADMIN\" -c \"blue,green,magenta\" \"npm run server\" \"npm run webapp\" \"npm run admin-app\"",
-    "dev-all": "concurrently \"npm run server\" \"npm run client\" \"npm run webapp\" \"npm run admin-app\""
+    "dev-all": "concurrently -n \"SERVER,CLIENT,USER,ADMIN\" -c \"blue,cyan,green,magenta\" \"npm run server\" \"npm run client\" \"npm run webapp\" \"npm run admin-app\"",
+    "build:all": "npm run build --workspaces --if-present",
+    "install-backend": "npm install --workspace=backend",
+    "install-frontend": "npm install --workspace=frontend",
+    "install-webapp": "npm install --workspace=webapp",
+    "install-admin-app": "npm install --workspace=admin-app",
+    "install-all": "npm install"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

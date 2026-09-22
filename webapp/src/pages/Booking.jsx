@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api/client';
+import { api, getCachedVenues, getCachedDepartments } from '../api/client';
 import { showCustomToast } from '../utils/toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { downloadOfficialReceiptPDF } from '../utils/pdfHeader';
@@ -7,7 +7,7 @@ import {
   Calendar, Clock, Building2, Users, CheckCircle2,
   AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight,
   Download, Search, MapPin, Check, FileDown, Copy,
-  Zap, Star
+  Zap, Star, ArrowRight, X, Sparkles
 } from 'lucide-react';
 
 // Operating hours: 5:00 AM to midnight
@@ -83,6 +83,7 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
   const [dayBookings, setDayBookings] = useState([]);
   const [slots, setSlots] = useState([]);
   const [slotPage, setSlotPage] = useState(0);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   useEffect(() => {
     if (venues.length > 0 && !venueId) setVenueId(venues[0].id);
@@ -118,26 +119,34 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
     return { isBooked: Boolean(conflict), conflict };
   };
 
-  const handleCheck = async () => {
-    if (!venueId || !bookDate || !startTime || !endTime) {
+  const handleCheck = async (customStart, customEnd) => {
+    const sTime = customStart || startTime;
+    const eTime = customEnd || endTime;
+    if (!venueId || !bookDate || !sTime || !eTime) {
       showCustomToast('Missing fields', 'Select venue, date, and timing', 'warning');
       return;
     }
-    if (timeToMins(startTime) >= timeToMins(endTime)) {
+    if (timeToMins(sTime) >= timeToMins(eTime)) {
       showCustomToast('Invalid Timing', 'End time must be after start time', 'warning');
       return;
     }
-    if (timeToMins(startTime) < 300 || timeToMins(endTime) > 1440) {
+    if (timeToMins(sTime) < 300 || timeToMins(eTime) > 1440) {
       showCustomToast('Operating Hours', 'Bookings are between 5:00 AM and 12:00 AM', 'warning');
       return;
     }
     setChecking(true);
     try {
-      const res = await api.checkAvailability({ venueId, bookingDate: bookDate, startTime, endTime });
-      setResult({ ...res, available: res.isAvailable });
+      const res = await api.checkAvailability({ venueId, bookingDate: bookDate, startTime: sTime, endTime: eTime });
+      const isAvailable = Boolean(res.isAvailable);
+      setResult({ ...res, available: isAvailable });
       setDayBookings(res.bookingsOnDay || []);
       setSlots(res.alternatives || []);
       setSlotPage(0);
+      if (isAvailable) {
+        setShowConfirmModal(true);
+      } else {
+        setShowConfirmModal(false);
+      }
     } catch (err) {
       showCustomToast('Error', err.message, 'error');
     } finally {
@@ -324,7 +333,7 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
                     if (isBooked) return;
                     setStartTime(slot.start);
                     setEndTime(slot.end);
-                    setResult(null);
+                    handleCheck(slot.start, slot.end);
                   }}
                   className={`slot-chip ${isSelected ? 'selected' : isBooked ? 'booked' : 'free'}`}
                 >
@@ -485,7 +494,13 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
                 {visibleSlots.map((slot, i) => (
                   <button
                     key={i}
-                    onClick={() => { setStartTime(slot.startTime || slot.start); setEndTime(slot.endTime || slot.end); setResult(null); }}
+                    onClick={() => {
+                      const s = slot.startTime || slot.start;
+                      const e = slot.endTime || slot.end;
+                      setStartTime(s);
+                      setEndTime(e);
+                      handleCheck(s, e);
+                    }}
                     className="slot-chip free"
                   >
                     <div style={{ fontSize: 11, fontWeight: 700 }}>
@@ -505,6 +520,201 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
           )}
         </div>
       )}
+
+      {/* ── Instant Slot Confirmation Popup Modal (No scrolling needed!) ── */}
+      {showConfirmModal && result?.available && (
+        <div className="modal-backdrop" onClick={() => setShowConfirmModal(false)}>
+          <div
+            className="modal-content"
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: 440,
+              padding: '24px 20px',
+              background: '#FFFFFF',
+              borderRadius: 24,
+              boxShadow: '0 25px 60px -15px rgba(15, 23, 42, 0.35)',
+              border: '1.5px solid #E2E8F0',
+              animation: 'scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 14,
+                  background: '#ECFDF5', border: '1.5px solid #A7F3D0',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#059669', flexShrink: 0
+                }}>
+                  <CheckCircle2 size={24} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: '#065F46', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    Slot Available! <span style={{ fontSize: 10, background: '#D1FAE5', color: '#047857', padding: '2px 8px', borderRadius: 999, fontWeight: 800, letterSpacing: 0.5 }}>READY</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    Ready to book this auditorium
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="btn-icon"
+                style={{ width: 32, height: 32, borderRadius: 10 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Details Summary Card */}
+            <div style={{
+              background: '#F8FAFC',
+              border: '1.5px solid #E2E8F0',
+              borderRadius: 18,
+              padding: '16px',
+              marginBottom: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, borderBottom: '1px solid #EEF2F6' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Building2 size={16} color="var(--primary)" />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{selectedVenue?.name}</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, background: 'var(--primary-light)', color: 'var(--primary-deeper)', padding: '3px 10px', borderRadius: 8 }}>
+                  {selectedVenue?.capacity} Seats
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Date</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1E293B', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Calendar size={12} color="#64748B" /> {bookDate}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5 }}>Duration</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#1E293B', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Clock size={12} color="#64748B" /> {durationLabel}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ background: '#FFFFFF', padding: '10px 14px', borderRadius: 12, border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>Timing:</span>
+                <span style={{ fontSize: 13, fontWeight: 900, color: 'var(--primary)' }}>
+                  {fmt12(startTime)} → {endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  onNext({ venueId, bookDate, startTime, endTime, selectedVenue });
+                }}
+                style={{
+                  height: 50,
+                  borderRadius: 14,
+                  background: 'linear-gradient(135deg, #10B981, #059669)',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Proceed to Fill Details <ArrowRight size={16} />
+              </button>
+
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                style={{
+                  height: 40,
+                  borderRadius: 12,
+                  background: '#F1F5F9',
+                  border: 'none',
+                  color: '#475569',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                Select a Different Time
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Sticky Floating Action Bar (Never need to scroll!) ── */}
+      {result?.available && !showConfirmModal && (
+        <div style={{
+          position: 'fixed',
+          bottom: 'calc(var(--nav-height, 68px) + 12px)',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 'calc(100% - 32px)',
+          maxWidth: 480,
+          background: 'rgba(15, 23, 42, 0.95)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          borderRadius: 18,
+          padding: '10px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          zIndex: 999,
+          boxShadow: '0 12px 36px rgba(15, 23, 42, 0.4)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          animation: 'scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: '#34D399', textTransform: 'uppercase', letterSpacing: 0.6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+              {selectedVenue?.name}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 900, color: '#FFFFFF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 1 }}>
+              {fmt12(startTime)} – {endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}
+            </div>
+          </div>
+          <button
+            onClick={() => onNext({ venueId, bookDate, startTime, endTime, selectedVenue })}
+            style={{
+              background: 'linear-gradient(135deg, #10B981, #059669)',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: 12,
+              padding: '10px 18px',
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)'
+            }}
+          >
+            Proceed <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -514,7 +724,7 @@ function StepForm({ slotData, onNext, onBack, currentUser }) {
   const { venueId, bookDate, startTime, endTime, selectedVenue } = slotData;
 
   const [eventName,   setEventName]   = useState('');
-  const [deptName,    setDeptName]    = useState('Information Technology');
+  const [deptName,    setDeptName]    = useState(() => currentUser?.departmentName || 'Information Technology');
   const [facultyName, setFacultyName] = useState(currentUser?.name || '');
   const [classYear,   setClassYear]   = useState('');
   const [attendees,   setAttendees]   = useState(75);
@@ -526,6 +736,7 @@ function StepForm({ slotData, onNext, onBack, currentUser }) {
   useEffect(() => {
     if (currentUser?.name) setFacultyName(currentUser.name);
     else { const s = localStorage.getItem('kirti_faculty_name'); if (s) setFacultyName(s); }
+    if (currentUser?.departmentName) setDeptName(currentUser.departmentName);
   }, [currentUser]);
 
   const overCapacity = selectedVenue && Number(attendees) > selectedVenue.capacity;
@@ -860,18 +1071,49 @@ export default function Booking({ currentUser, onOpenAuth }) {
   const [step,        setStep]        = useState(0);
   const [slotData,    setSlotData]    = useState(null);
   const [booking,     setBooking]     = useState(null);
-  const [venues,      setVenues]      = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [loading,     setLoading]     = useState(true);
+  const [venues,      setVenues]      = useState(() => {
+    const cached = getCachedVenues();
+    return (cached || []).filter(x => x.status !== 'Maintenance');
+  });
+  const [departments, setDepartments] = useState(() => getCachedDepartments());
+  // Immediate 0ms load if venues are available from cache!
+  const [loading,     setLoading]     = useState(() => venues.length === 0);
+  const [isWakingUp,  setIsWakingUp]  = useState(false);
 
   useEffect(() => {
-    Promise.all([api.getVenues().catch(() => []), api.getDepartments().catch(() => [])])
+    let active = true;
+    const wakeTimer = setTimeout(() => {
+      if (active && loading) setIsWakingUp(true);
+    }, 2000);
+
+    const hardTimeout = setTimeout(() => {
+      if (active && loading) {
+        setVenues(getCachedVenues());
+        setDepartments(getCachedDepartments());
+        setLoading(false);
+      }
+    }, 4500);
+
+    Promise.all([
+      api.getVenues().catch(() => getCachedVenues()),
+      api.getDepartments().catch(() => getCachedDepartments())
+    ])
       .then(([v, d]) => {
-        const activeV = (v || []).filter(x => x.status !== 'Maintenance');
-        setVenues(activeV);
-        setDepartments(d || []);
+        if (!active) return;
+        const validV = (v && v.length > 0) ? v : getCachedVenues();
+        const activeV = validV.filter(x => x.status !== 'Maintenance');
+        setVenues(activeV.length > 0 ? activeV : getCachedVenues());
+        setDepartments((d && d.length > 0) ? d : getCachedDepartments());
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      clearTimeout(wakeTimer);
+      clearTimeout(hardTimeout);
+    };
   }, []);
 
   return (
@@ -879,9 +1121,38 @@ export default function Booking({ currentUser, onOpenAuth }) {
       <StepBar step={step} />
 
       {loading ? (
-        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-          <span className="spinner-primary" style={{ margin: '0 auto 12px', display: 'block' }} />
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading venues…</div>
+        <div className="card" style={{ textAlign: 'center', padding: '32px 20px' }}>
+          <span className="spinner-primary" style={{ margin: '0 auto 14px', display: 'block' }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)', marginBottom: 6 }}>
+            {isWakingUp ? 'Waking up secure server…' : 'Loading venues…'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 300, margin: '0 auto 16px', lineHeight: 1.4 }}>
+            {isWakingUp
+              ? 'Free cloud servers take a few moments to spin up from sleep mode.'
+              : 'Preparing auditorium booking details…'}
+          </div>
+          {isWakingUp && (
+            <button
+              type="button"
+              onClick={() => {
+                setVenues(getCachedVenues());
+                setDepartments(getCachedDepartments());
+                setLoading(false);
+              }}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 'var(--r-md)',
+                background: 'var(--primary-light)',
+                color: 'var(--primary-deeper)',
+                border: '1px solid var(--primary-border)',
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: 'pointer'
+              }}
+            >
+              ⚡ Continue with standard auditorium
+            </button>
+          )}
         </div>
       ) : (
         <>

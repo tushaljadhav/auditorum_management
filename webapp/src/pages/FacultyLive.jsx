@@ -12,6 +12,7 @@ export default function FacultyLive({ currentUser, onOpenAuth }) {
   const [facultyName, setFacultyName] = useState('');
   const [roomName, setRoomName] = useState('Auditorium Complex');
   const [windowMins, setWindowMins] = useState(15);
+  const [radius, setRadius] = useState(100);
   const [customPin, setCustomPin] = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
 
   const [coords, setCoords] = useState(null);
@@ -81,9 +82,10 @@ export default function FacultyLive({ currentUser, onOpenAuth }) {
       const payload = {
         eventName: eventName.trim(),
         facultyName: facultyName.trim(),
-        departmentName: currentUser?.departmentId || 'General',
+        departmentName: currentUser?.departmentName || currentUser?.departmentId || 'General',
         roomName: roomName.trim(),
         windowMins: Number(windowMins),
+        radius: Number(radius),
         pin: customPin.trim(),
         latitude: coords?.lat || null,
         longitude: coords?.lon || null,
@@ -313,8 +315,8 @@ export default function FacultyLive({ currentUser, onOpenAuth }) {
           </div>
           <div style={{ fontSize: 11, color: coords ? '#059669' : 'var(--text-muted)' }}>
             {coords
-              ? `${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}`
-              : 'Students must be within 100m to check in'}
+              ? `${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)} • ${radius}m Geofence`
+              : `Students must be within ${radius}m to check in`}
           </div>
         </div>
         {!coords && (
@@ -380,17 +382,18 @@ export default function FacultyLive({ currentUser, onOpenAuth }) {
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 10 }}>
-          <div>
-            <label className="field-label">Room / Hall</label>
-            <input
-              type="text"
-              placeholder="e.g. Lab 4 / Hall A"
-              value={roomName}
-              onChange={e => setRoomName(e.target.value)}
-              className="app-input"
-            />
-          </div>
+        <div>
+          <label className="field-label">Room / Hall</label>
+          <input
+            type="text"
+            placeholder="e.g. Lab 4 / Hall A"
+            value={roomName}
+            onChange={e => setRoomName(e.target.value)}
+            className="app-input"
+          />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div>
             <label className="field-label">Duration</label>
             <select
@@ -403,6 +406,21 @@ export default function FacultyLive({ currentUser, onOpenAuth }) {
               <option value={15}>15 mins</option>
               <option value={30}>30 mins</option>
               <option value={60}>60 mins</option>
+            </select>
+          </div>
+          <div>
+            <label className="field-label">Geofence Radius (Meters)</label>
+            <select
+              value={radius}
+              onChange={e => setRadius(Number(e.target.value))}
+              className="app-input"
+            >
+              <option value={25}>25 Meters (Classroom / Lab)</option>
+              <option value={50}>50 Meters (Small Hall / Wing)</option>
+              <option value={100}>100 Meters (Standard / Floor)</option>
+              <option value={150}>150 Meters (Auditorium Complex)</option>
+              <option value={200}>200 Meters (Entire Block)</option>
+              <option value={500}>500 Meters (Campus Wide)</option>
             </select>
           </div>
         </div>

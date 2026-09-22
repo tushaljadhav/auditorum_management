@@ -44,7 +44,7 @@ export default function LoginModal({ isOpen, onClose, onUserChange }) {
     e.preventDefault();
     const fac = facultyList.find(f => f.id === selectedFacultyId) || facultyList[0];
     if (!fac) return;
-    const user = { role: 'faculty', id: fac.id, name: fac.name, email: fac.email, departmentId: fac.departmentId };
+    const user = { role: 'faculty', id: fac.id, name: fac.name, email: fac.email, departmentId: fac.departmentId, departmentName: fac.departmentName || fac.departmentId };
     sessionManager.setUser(user);
     setCurrentUser(user);
     onUserChange?.(user);
@@ -221,7 +221,7 @@ export default function LoginModal({ isOpen, onClose, onUserChange }) {
                   onChange={e => setSelectedFacultyId(e.target.value)}
                 >
                   {facultyList.map(f => (
-                    <option key={f.id} value={f.id}>{f.name} — {f.departmentId || 'Faculty'}</option>
+                    <option key={f.id} value={f.id}>{f.name} — {f.departmentName || f.departmentId || 'Faculty'}</option>
                   ))}
                 </select>
               )}

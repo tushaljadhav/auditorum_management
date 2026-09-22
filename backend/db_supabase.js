@@ -15,6 +15,9 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000
 });
 
+// Ensure sessionRadius column exists in bookings
+pool.query('ALTER TABLE bookings ADD COLUMN IF NOT EXISTS "sessionRadius" INT DEFAULT 100').catch(() => {});
+
 async function query(sql, params = []) {
   try {
     const res = await pool.query(sql, params);
@@ -102,9 +105,11 @@ const dbSupabase = {
   getFaculty: async () => {
     return await query(`
       SELECT f.*, d.name as "designationName", 
+             COALESCE(dept.name, f."departmentId", '') as "departmentName",
              CONCAT(COALESCE(d.name, ''), ' ', f.name) as "fullName" 
       FROM faculty f
       LEFT JOIN designations d ON f."designationId" = d.id
+      LEFT JOIN departments dept ON f."departmentId" = dept.id
       ORDER BY f.name ASC
     `);
   },
@@ -123,7 +128,16 @@ const dbSupabase = {
       f.designationId || null,
       status
     ]);
-    return { id, ...f, status };
+    const rows = await query(`
+      SELECT f.*, d.name as "designationName", 
+             COALESCE(dept.name, f."departmentId", '') as "departmentName",
+             CONCAT(COALESCE(d.name, ''), ' ', f.name) as "fullName" 
+      FROM faculty f
+      LEFT JOIN designations d ON f."designationId" = d.id
+      LEFT JOIN departments dept ON f."departmentId" = dept.id
+      WHERE f.id = $1
+    `, [id]);
+    return rows[0] || { id, ...f, status };
   },
   updateFaculty: async (id, fields) => {
     await query(`
@@ -140,9 +154,11 @@ const dbSupabase = {
     ]);
     const rows = await query(`
       SELECT f.*, d.name as "designationName", 
+             COALESCE(dept.name, f."departmentId", '') as "departmentName",
              CONCAT(COALESCE(d.name, ''), ' ', f.name) as "fullName" 
       FROM faculty f
       LEFT JOIN designations d ON f."designationId" = d.id
+      LEFT JOIN departments dept ON f."departmentId" = dept.id
       WHERE f.id = $1
     `, [id]);
     return rows[0] || null;
@@ -151,9 +167,11 @@ const dbSupabase = {
     await query('UPDATE faculty SET status = $1 WHERE id = $2', [status, id]);
     const rows = await query(`
       SELECT f.*, d.name as "designationName", 
+             COALESCE(dept.name, f."departmentId", '') as "departmentName",
              CONCAT(COALESCE(d.name, ''), ' ', f.name) as "fullName" 
       FROM faculty f
       LEFT JOIN designations d ON f."designationId" = d.id
+      LEFT JOIN departments dept ON f."departmentId" = dept.id
       WHERE f.id = $1
     `, [id]);
     return rows[0] || null;

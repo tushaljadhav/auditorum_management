@@ -151,7 +151,8 @@ function StudentTab({ preselectedSession, currentUser }) {
   );
 
   const openSessions  = sessions.filter(s => s.attendanceStatus === 'OPEN');
-  const isInRange     = distance !== null && distance <= 125;
+  const allowedRadius = Number(selectedSession?.sessionRadius || selectedSession?.radius || 100);
+  const isInRange     = distance !== null && distance <= (allowedRadius + 25);
 
   return (
     <div className="animate-fade-in">
@@ -250,7 +251,7 @@ function StudentTab({ preselectedSession, currentUser }) {
               {locating ? 'Capturing GPS…' : isInRange ? '✓ Within Campus Perimeter' : distance !== null ? '⚠ Outside Allowed Zone' : 'Location Check'}
             </div>
             <div style={{ fontSize: 11, fontWeight: 600, color: isInRange ? 'var(--secondary-dark)' : 'var(--text-muted)', marginTop: 2 }}>
-              {distance !== null ? `Distance: ~${distance}m  (Allowed: ≤125m)` : 'Tap refresh to detect location'}
+              {distance !== null ? `Distance: ~${distance}m  (Allowed: ≤${allowedRadius + 25}m)` : 'Tap refresh to detect location'}
             </div>
           </div>
           <button onClick={captureGPS} disabled={locating} className="btn-icon">
@@ -360,6 +361,7 @@ function FacultyTab({ currentUser }) {
   const [csDeptName,      setCsDeptName]        = useState('Information Technology');
   const [csRoomName,      setCsRoomName]        = useState('Auditorium');
   const [csWindowMins,    setCsWindowMins]      = useState(15);
+  const [csRadius,        setCsRadius]          = useState(100);
   const [csPin,           setCsPin]             = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
   const [csSubmitting,    setCsSubmitting]       = useState(false);
 
@@ -453,7 +455,7 @@ function FacultyTab({ currentUser }) {
         latitude:       coords?.lat || null,
         longitude:      coords?.lon || null,
         attendees:      60,
-        radius:         100,
+        radius:         csRadius,
       });
       setShowCreateModal(false);
       const sess = res.booking || res;
@@ -832,16 +834,27 @@ function FacultyTab({ currentUser }) {
                   </select>
                 </div>
                 <div>
-                  <label className="form-label" style={{ color: 'var(--amber-text)' }}>Live PIN</label>
-                  <div style={{ position: 'relative' }}>
-                    <input className="app-input" type="text" value={csPin} maxLength={6}
-                      onChange={e => setCsPin(e.target.value.replace(/\D/g, ''))}
-                      style={{ letterSpacing: 4, fontWeight: 900, paddingRight: 36 }} />
-                    <button type="button" onClick={() => setCsPin(Math.floor(1000 + Math.random() * 9000).toString())}
-                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 16, fontWeight: 900 }}>
-                      ⟳
-                    </button>
-                  </div>
+                  <label className="form-label">Geofence Radius (m)</label>
+                  <select className="app-select" value={csRadius} onChange={e => setCsRadius(Number(e.target.value))}>
+                    <option value={25}>25 Meters</option>
+                    <option value={50}>50 Meters</option>
+                    <option value={100}>100 Meters</option>
+                    <option value={150}>150 Meters</option>
+                    <option value={200}>200 Meters</option>
+                    <option value={500}>500 Meters</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group" style={{ marginBottom: 14 }}>
+                <label className="form-label" style={{ color: 'var(--amber-text)' }}>Live PIN</label>
+                <div style={{ position: 'relative' }}>
+                  <input className="app-input" type="text" value={csPin} maxLength={6}
+                    onChange={e => setCsPin(e.target.value.replace(/\D/g, ''))}
+                    style={{ letterSpacing: 4, fontWeight: 900, paddingRight: 36 }} />
+                  <button type="button" onClick={() => setCsPin(Math.floor(1000 + Math.random() * 9000).toString())}
+                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 16, fontWeight: 900 }}>
+                    ⟳
+                  </button>
                 </div>
               </div>
               <button type="submit" className="btn-emerald" disabled={csSubmitting}>

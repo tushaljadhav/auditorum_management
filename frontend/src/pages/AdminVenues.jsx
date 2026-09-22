@@ -373,54 +373,15 @@ export default function AdminVenues() {
                   />
                 </div>
 
-                {/* GPS Location Section */}
-                <div style={{ padding: '16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Navigation size={15} style={{ color: '#2563EB' }} /> GPS & Geofence Coordinates
-                    </div>
-                    <button type="button" onClick={handleGetCurrentLocation} disabled={fetchingGps}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#2563EB', fontSize: '0.78rem', fontWeight: 700, cursor: fetchingGps ? 'not-allowed' : 'pointer', transition: 'all 0.15s ease' }}
-                    >
-                      {fetchingGps ? (
-                        <><span style={{ width: 12, height: 12, border: '2px solid rgba(37,99,235,0.3)', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} /> Fetching...</>
-                      ) : <><MapPin size={13} /> Detect Location</>}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12 }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748B', marginBottom: 4 }}>Latitude</label>
-                      <input type="number" step="any" placeholder="e.g. 19.0269" value={form.latitude} onChange={e => setForm({ ...form, latitude: e.target.value })} 
-                        style={{ width: '100%', padding: '8px 10px', fontSize: '0.82rem', color: '#0F172A', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 8, outline: 'none' }} 
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#64748B', marginBottom: 4 }}>Longitude</label>
-                      <input type="number" step="any" placeholder="e.g. 72.8422" value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })} 
-                        style={{ width: '100%', padding: '8px 10px', fontSize: '0.82rem', color: '#0F172A', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 8, outline: 'none' }} 
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>Geofence Radius (Meters)</label>
-                    <input type="number" placeholder="e.g. 50" value={form.radius} onChange={e => setForm({ ...form, radius: e.target.value })} 
-                      style={{ width: '100%', padding: '9px 12px', fontSize: '0.875rem', color: '#0F172A', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, outline: 'none', boxSizing: 'border-box' }} 
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>Status</label>
-                    <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} 
-                      style={{ width: '100%', padding: '9px 12px', fontSize: '0.875rem', color: '#0F172A', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, outline: 'none', boxSizing: 'border-box' }}
-                    >
-                      <option value="Active">Active (Available)</option>
-                      <option value="Maintenance">Maintenance (Locked)</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
-                  </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>Status</label>
+                  <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} 
+                    style={{ width: '100%', padding: '9px 12px', fontSize: '0.875rem', color: '#0F172A', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, outline: 'none', boxSizing: 'border-box' }}
+                  >
+                    <option value="Active">Active (Available)</option>
+                    <option value="Maintenance">Maintenance (Locked)</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
                 </div>
 
                 {form.status === 'Maintenance' && (
