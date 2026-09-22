@@ -56,11 +56,11 @@ export default function Splash({ onDone }) {
 
         {/* Title */}
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 24, fontWeight: 900, color: '#FFFFFF', letterSpacing: '-0.5px', lineHeight: 1.2, marginBottom: 6 }}>
-            Kirti College
+          <div style={{ fontSize: 26, fontWeight: 900, color: '#FFFFFF', letterSpacing: '-0.5px', lineHeight: 1.2, marginBottom: 6 }}>
+            Kirti Audit
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#A5B4FC', letterSpacing: 0.3 }}>
-            Auditorium Management Portal
+            Kirti M. Doongursee College
           </div>
           <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block', animation: 'radarPing 2s ease-in-out infinite' }} />

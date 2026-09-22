@@ -406,7 +406,7 @@ export default function Profile({ currentUser, onUserChange, onNavigate }) {
                 <Download size={16} color="#2563EB" />
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 750, color: 'var(--text-primary)' }}>Download Faculty App</div>
+                <div style={{ fontSize: 13, fontWeight: 750, color: 'var(--text-primary)' }}>Download Kirti Audit</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Install to Home Screen for fast offline booking</div>
               </div>
             </div>

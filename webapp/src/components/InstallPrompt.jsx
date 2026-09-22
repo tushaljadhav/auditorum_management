@@ -117,7 +117,7 @@ export default function InstallPrompt() {
         zIndex: 9999
       }}>
         <CheckCircle2 size={20} color="#10B981" />
-        <span>🎉 Kirti Faculty App Installed! Launch anytime directly from your Home Screen.</span>
+        <span>🎉 Kirti Audit Installed! Launch anytime directly from your Home Screen.</span>
       </div>
     );
   }
@@ -158,7 +158,7 @@ export default function InstallPrompt() {
           </div>
           <div>
             <div style={{ fontSize: '13px', fontWeight: '800', letterSpacing: '-0.01em', color: '#FFFFFF' }}>
-              Download Faculty App
+              Download Kirti Audit
             </div>
             <div style={{ fontSize: '11px', color: '#94A3B8', fontWeight: '500' }}>
               One-tap access & fast offline booking
@@ -244,7 +244,7 @@ export default function InstallPrompt() {
             </div>
 
             <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#0F172A', margin: '0 0 8px' }}>
-              How to Install Faculty App
+              How to Install Kirti Audit
             </h3>
             
             <p style={{ fontSize: '13px', color: '#64748B', lineHeight: '1.5', margin: '0 0 16px' }}>

@@ -1,7 +1,7 @@
 {
-  "name": "Kirti Auditorium & Attendance",
-  "short_name": "Auditorium",
-  "description": "College Auditorium Booking & GPS Attendance System for Kirti M. Doongursee College",
+  "name": "Kirti Audit",
+  "short_name": "Kirti Audit",
+  "description": "College Auditorium Booking & GPS Attendance Portal for Kirti M. Doongursee College",
   "start_url": "/",
   "id": "/",
   "scope": "/",
@@ -33,12 +33,6 @@
       "src": "/Logo.png",
       "sizes": "222x227",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
       "purpose": "any"
     }
   ],
