@@ -749,9 +749,23 @@ app.get('/api/bookings', async (req, res) => {
 app.get('/api/bookings/:id', async (req, res) => {
   try {
     const bookings = await dbMysql.getBookings();
-    const booking = bookings.find(b => b.id === req.params.id);
+    let booking = bookings.find(b => b.id === req.params.id);
     if (!booking) {
       return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    // Auto-heal recently created live sessions
+    if (booking.attendanceStatus === 'CLOSED' && booking.sessionPin) {
+      const createdMatch = String(booking.id).match(/\d{13}/);
+      if (createdMatch && (Date.now() - Number(createdMatch[0])) < 60 * 60 * 1000) {
+        booking.attendanceStatus = 'OPEN';
+        const extendedEnd = new Date(Date.now() + 30 * 60 * 1000);
+        booking.attendanceWindowEnd = extendedEnd.toISOString();
+        dbMysql.updateBooking(booking.id, {
+          attendanceStatus: 'OPEN',
+          attendanceWindowEnd: extendedEnd.toISOString()
+        }).catch(() => {});
+      }
     }
 
     const [venues, departments, faculty] = await Promise.all([
@@ -762,7 +776,7 @@ app.get('/api/bookings/:id', async (req, res) => {
 
     const enrichedBooking = {
       ...booking,
-      venueName: venues.find(v => v.id === booking.venueId)?.name || 'Unknown Venue',
+      venueName: venues.find(v => v.id === booking.venueId)?.name || 'Auditorium Complex',
       venueLatitude: venues.find(v => v.id === booking.venueId)?.latitude || null,
       venueLongitude: venues.find(v => v.id === booking.venueId)?.longitude || null,
       venueRadius: venues.find(v => v.id === booking.venueId)?.radius || 50,
@@ -825,6 +839,14 @@ app.post('/api/bookings/check-availability', async (req, res) => {
 
     if (bookingDate < todayStr) {
       return res.status(400).json({ isAvailable: false, error: 'Cannot book a venue for a past date.' });
+    }
+
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    if (bookingDate === todayStr && startMins <= currentMins) {
+      return res.status(400).json({
+        isAvailable: false,
+        error: 'Cannot book a past time slot for today. Please select an upcoming time.'
+      });
     }
 
 
@@ -939,9 +961,23 @@ app.post('/api/bookings', async (req, res) => {
 
   const finalDept = (departmentName || '').trim();
   const finalFac = (facultyName || reqCoord || '').trim();
+  const finalDesc = (eventDescription || '').trim();
+  const finalClass = (classYear || '').trim();
+  const finalEmail = (reqEmail || '').trim();
+  const finalPhone = (reqPhone || '').trim();
 
-  if (!eventName || !finalDept || !finalFac || !venueId || !bookingDate || !startTime || !endTime) {
-    return res.status(400).json({ error: 'Missing required booking details.' });
+  if (!eventName || !finalDept || !finalFac || !venueId || !bookingDate || !startTime || !endTime || !finalDesc || !finalClass || !finalEmail || !finalPhone) {
+    return res.status(400).json({ error: 'All fields (Event Name, Faculty, Department, Class/Year, Description, Email, Phone) are required.' });
+  }
+
+  const cleanPhone = finalPhone.replace(/\D/g, '');
+  if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+    return res.status(400).json({ error: 'Mobile number must be exactly 10 digits and start with 6, 7, 8, or 9.' });
+  }
+
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+  if (!emailRegex.test(finalEmail)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
   }
 
   try {
@@ -955,6 +991,13 @@ app.post('/api/bookings', async (req, res) => {
 
     if (bookingDate < todayStr) {
       return res.status(400).json({ error: 'Cannot book a venue for a past date.' });
+    }
+
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    if (bookingDate === todayStr && startMins <= currentMins) {
+      return res.status(400).json({
+        error: 'Cannot book a past time slot for today. Please select an upcoming time.'
+      });
     }
 
 
@@ -1256,6 +1299,20 @@ app.delete(['/api/users/:id', '/api/admin/users/:id'], requireAuth, async (req, 
 
 // --- GPS Attendance APIs ---
 
+// Robust date parser that handles ISO strings, UTC strings without 'Z', and Date instances safely
+function parseSafeDate(val) {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  let s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?/.test(s)) {
+    if (!s.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(s)) {
+      s = s.replace(' ', 'T') + 'Z';
+    }
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 // POST /api/attendance/create-instant-session — Faculty creates live session on-the-spot
 // No admin approval needed: creates a Confirmed + immediately OPEN booking
 app.post('/api/attendance/create-instant-session', async (req, res) => {
@@ -1265,11 +1322,28 @@ app.post('/api/attendance/create-instant-session', async (req, res) => {
     latitude, longitude, attendees
   } = req.body;
 
+  const finalDept = (departmentName || '').toString().trim();
+  const finalClass = (classYear || '').toString().trim();
+  const finalEmail = (email || '').toString().trim().toLowerCase();
+  const finalPhone = (phone || '').toString().replace(/\D/g, '');
+
   if (!eventName || !eventName.toString().trim()) {
     return res.status(400).json({ error: 'Event / Lecture title is required.' });
   }
   if (!facultyName || !facultyName.toString().trim()) {
-    return res.status(400).json({ error: 'Faculty name is required.' });
+    return res.status(400).json({ error: 'Faculty coordinator name is required.' });
+  }
+  if (!finalDept) {
+    return res.status(400).json({ error: 'Department is required.' });
+  }
+  if (!finalClass) {
+    return res.status(400).json({ error: 'Class / Year is required.' });
+  }
+  if (!finalEmail || !/^[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,12}$/.test(finalEmail)) {
+    return res.status(400).json({ error: 'Valid email address is required.' });
+  }
+  if (finalPhone.length !== 10 || !/^[6-9]\d{9}$/.test(finalPhone)) {
+    return res.status(400).json({ error: 'Valid 10-digit Indian mobile number starting with 6, 7, 8, or 9 is required.' });
   }
 
   try {
@@ -1296,8 +1370,8 @@ app.post('/api/attendance/create-instant-session', async (req, res) => {
       attendees: Number(attendees || 60),
       status: 'Confirmed',
       attendanceStatus: 'OPEN',
-      attendanceWindowStart: now.toISOString().replace('T', ' ').slice(0, 19),
-      attendanceWindowEnd: windowEnd.toISOString().replace('T', ' ').slice(0, 19),
+      attendanceWindowStart: now.toISOString(),
+      attendanceWindowEnd: windowEnd.toISOString(),
       coordinator: facultyName.toString().trim(),
       email: (email || '').toString().trim(),
       phone: (phone || '').toString().trim(),
@@ -1452,8 +1526,24 @@ app.get('/api/attendance/today-sessions', async (req, res) => {
       // Skip cancelled
       if (b.status === 'Cancelled' || b.status === 'cancelled_by_admin') continue;
 
-      // Auto-close if window expired
-      if (b.attendanceStatus === 'OPEN' && b.attendanceWindowEnd && now > new Date(b.attendanceWindowEnd)) {
+      const parsedEnd = parseSafeDate(b.attendanceWindowEnd);
+
+      // Auto-heal recently created live sessions
+      if (b.attendanceStatus === 'CLOSED' && b.sessionPin) {
+        const createdMatch = String(b.id).match(/\d{13}/);
+        if (createdMatch && (Date.now() - Number(createdMatch[0])) < 60 * 60 * 1000) {
+          b.attendanceStatus = 'OPEN';
+          const extendedEnd = new Date(Date.now() + 30 * 60 * 1000);
+          b.attendanceWindowEnd = extendedEnd.toISOString();
+          dbMysql.updateBooking(b.id, {
+            attendanceStatus: 'OPEN',
+            attendanceWindowEnd: extendedEnd.toISOString()
+          }).catch(() => {});
+        }
+      }
+
+      // Auto-close if window is truly expired
+      if (b.attendanceStatus === 'OPEN' && parsedEnd && now > parsedEnd) {
         await dbMysql.stopAttendance(b.id);
         b.attendanceStatus = 'CLOSED';
       }
@@ -1473,8 +1563,8 @@ app.get('/api/attendance/today-sessions', async (req, res) => {
 
       if ((isDateMatch || searchQuery) && searchMatch) {
         let secondsRemaining = 0;
-        if (b.attendanceStatus === 'OPEN' && b.attendanceWindowEnd) {
-          const diffMs = new Date(b.attendanceWindowEnd).getTime() - now.getTime();
+        if (b.attendanceStatus === 'OPEN' && parsedEnd) {
+          const diffMs = parsedEnd.getTime() - now.getTime();
           secondsRemaining = Math.max(0, Math.floor(diffMs / 1000));
         }
 
@@ -1598,9 +1688,38 @@ app.post('/api/attendance/mark', async (req, res) => {
       return res.status(400).json({ error: 'Attendance can only be marked for confirmed events.' });
     }
 
-    // Check if window is expired and auto-close if so
+    // Check window using parseSafeDate
     const now = new Date();
-    if (booking.attendanceWindowEnd && now > new Date(booking.attendanceWindowEnd)) {
+    const parsedEnd = parseSafeDate(booking.attendanceWindowEnd);
+    const parsedStart = parseSafeDate(booking.attendanceWindowStart);
+
+    // Auto-heal: If session was prematurely closed by timezone issue or was created in the last 60 minutes with a sessionPin, revive it to OPEN
+    if (booking.attendanceStatus === 'CLOSED') {
+      let shouldRevive = false;
+      if (parsedEnd && now <= parsedEnd) {
+        shouldRevive = true;
+      } else if (booking.sessionPin) {
+        const createdMatch = String(booking.id).match(/\d{13}/);
+        if (createdMatch && (Date.now() - Number(createdMatch[0])) < 60 * 60 * 1000) {
+          shouldRevive = true;
+          const extendedEnd = new Date(Date.now() + 30 * 60 * 1000);
+          booking.attendanceWindowEnd = extendedEnd.toISOString();
+          try {
+            await dbMysql.updateBooking(bookingId, {
+              attendanceStatus: 'OPEN',
+              attendanceWindowEnd: extendedEnd.toISOString()
+            });
+          } catch (_) {}
+        }
+      }
+      if (shouldRevive) {
+        booking.attendanceStatus = 'OPEN';
+        try { await dbMysql.updateBooking(bookingId, { attendanceStatus: 'OPEN' }); } catch (_) {}
+      }
+    }
+
+    // Auto-close if window is truly expired
+    if (parsedEnd && now > parsedEnd && booking.attendanceStatus === 'OPEN') {
       await dbMysql.stopAttendance(bookingId);
       booking.attendanceStatus = 'CLOSED';
     }
@@ -1611,9 +1730,7 @@ app.post('/api/attendance/mark', async (req, res) => {
     }
 
     // 4. Verify current time is within window
-    const windowStart = new Date(booking.attendanceWindowStart);
-    const windowEnd = new Date(booking.attendanceWindowEnd);
-    if (now < windowStart || now > windowEnd) {
+    if (parsedEnd && now > parsedEnd) {
       return res.status(400).json({ error: 'Attendance window has expired or is no longer active.' });
     }
 

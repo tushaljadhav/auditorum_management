@@ -69,6 +69,47 @@ function calcDurationStr(start, end) {
   return `${mins} mins`;
 }
 
+function getTodayDateStr() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function sanitizeIndianMobile(val) {
+  if (!val) return '';
+  let digits = String(val).replace(/\D/g, '');
+  if (digits.startsWith('91') && digits.length > 10) {
+    digits = digits.slice(2);
+  } else if (digits.startsWith('0') && digits.length > 10) {
+    digits = digits.slice(1);
+  }
+  return digits.slice(0, 10);
+}
+
+function isValidEmail(val) {
+  if (!val) return false;
+  const str = String(val).trim().toLowerCase();
+  const regex = /^[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,12}$/;
+  if (!regex.test(str)) return false;
+  if (str.includes('..')) return false;
+  const [local, domain] = str.split('@');
+  if (!local || !domain) return false;
+  if (local.startsWith('.') || local.endsWith('.')) return false;
+  if (domain.startsWith('.') || domain.endsWith('.') || domain.startsWith('-') || domain.endsWith('-')) return false;
+  return true;
+}
+
+function isSlotPast(slot, dateStr) {
+  const todayStr = getTodayDateStr();
+  if (!dateStr || dateStr < todayStr) return true;
+  if (dateStr > todayStr) return false;
+  const now = new Date();
+  const currentMins = now.getHours() * 60 + now.getMinutes();
+  return timeToMins(slot.start) <= currentMins;
+}
+
 /* ── Venue Icon helper ── */
 const VENUE_ICONS = ['🏛️', '🎭', '🏟️', '🎪', '🏢', '🎓'];
 const VENUE_GRADIENTS = [
@@ -83,7 +124,7 @@ const VENUE_GRADIENTS = [
 /* ── Step 1: Check Availability ── */
 function StepAvailability({ onNext, currentUser, venues = [] }) {
   const [venueId, setVenueId] = useState(venues[0]?.id || '');
-  const [bookDate, setBookDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [bookDate, setBookDate] = useState(getTodayDateStr);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [slotFilter, setSlotFilter] = useState('all');
@@ -103,6 +144,18 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
   useEffect(() => {
     setSlotPage(0);
   }, [slotFilter, venueId, bookDate]);
+
+  // If date changes to today and currently selected time has already passed, clear selection
+  useEffect(() => {
+    if (bookDate === getTodayDateStr() && startTime) {
+      const now = new Date();
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      if (timeToMins(startTime) <= currentMins) {
+        setStartTime('');
+        setEndTime('');
+      }
+    }
+  }, [bookDate]);
 
   // Load existing bookings on the selected venue & date
   useEffect(() => {
@@ -124,6 +177,7 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
   }, [venueId, bookDate]);
 
   const getSlotAvailability = (slot) => {
+    const isPast = isSlotPast(slot, bookDate);
     const sStart = timeToMins(slot.start);
     const sEnd = timeToMins(slot.end);
     const conflict = dayBookings.find(b => {
@@ -131,13 +185,26 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
       const bEnd = timeToMins(b.endTime);
       return sStart < bEnd && sEnd > bStart;
     });
-    return { isBooked: Boolean(conflict), conflict };
+    return { isBooked: Boolean(conflict), conflict, isPast };
   };
 
   const handleCheck = async () => {
     if (!venueId || !bookDate || !startTime || !endTime) {
       showCustomToast('Select Time', 'Please select a time slot or enter custom timing', 'warning');
       return;
+    }
+    const todayStr = getTodayDateStr();
+    if (bookDate < todayStr) {
+      showCustomToast('Past Date', 'Past dates cannot be booked. Please select today or a future date.', 'warning');
+      return;
+    }
+    if (bookDate === todayStr) {
+      const now = new Date();
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      if (timeToMins(startTime) <= currentMins) {
+        showCustomToast('Time Passed', 'This time slot has already passed. Please select an upcoming slot.', 'warning');
+        return;
+      }
     }
     if (timeToMins(startTime) >= timeToMins(endTime)) {
       showCustomToast('Invalid Timing', 'End time must be after start time', 'warning');
@@ -197,7 +264,7 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
         time: `${fmt12(startTime)} – ${endTime === '00:00' ? '12:00 AM' : fmt12(endTime)}`,
         bookedBy: localConflict?.facultyName || 'Faculty',
         eventName: localConflict?.eventName || '',
-        error: err.message || 'Yeh slot available nahi hai.'
+        error: err.message || 'This slot is currently unavailable.'
       });
       setShowConflictModal(true);
     } finally {
@@ -207,11 +274,18 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
 
   const selectedVenue = venues.find(v => v.id === venueId);
   const durationLabel = calcDurationStr(startTime, endTime);
-  const bookedCount = STANDARD_DAY_SLOTS.filter(s => getSlotAvailability(s).isBooked).length;
-  const freeCount = STANDARD_DAY_SLOTS.length - bookedCount;
+  const bookedCount = STANDARD_DAY_SLOTS.filter(s => {
+    const { isBooked, isPast } = getSlotAvailability(s);
+    return isBooked && !isPast;
+  }).length;
+  const freeCount = STANDARD_DAY_SLOTS.filter(s => {
+    const { isBooked, isPast } = getSlotAvailability(s);
+    return !isBooked && !isPast;
+  }).length;
 
   const filteredSuggestions = STANDARD_DAY_SLOTS.filter(s => {
-    const { isBooked } = getSlotAvailability(s);
+    const { isBooked, isPast } = getSlotAvailability(s);
+    if (isPast) return false; // Completely hide past slots!
     if (slotFilter === 'free') return !isBooked;
     if (slotFilter === 'booked') return isBooked;
     return true;
@@ -405,12 +479,18 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
 
           {/* Quick day chips */}
           {(() => {
-            const today = new Date();
             const chips = [
-              { label: 'Today', date: new Date(today) },
-              { label: 'Tomorrow', date: new Date(new Date().setDate(today.getDate() + 1)) },
-              { label: 'Day After', date: new Date(new Date().setDate(today.getDate() + 2)) },
-            ].map(c => ({ ...c, val: c.date.toISOString().split('T')[0] }));
+              { label: 'Today', offset: 0 },
+              { label: 'Tomorrow', offset: 1 },
+              { label: 'Day After', offset: 2 },
+            ].map(c => {
+              const d = new Date();
+              d.setDate(d.getDate() + c.offset);
+              const year = d.getFullYear();
+              const month = String(d.getMonth() + 1).padStart(2, '0');
+              const day = String(d.getDate()).padStart(2, '0');
+              return { label: c.label, date: d, val: `${year}-${month}-${day}` };
+            });
             return (
               <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
                 {chips.map(c => (
@@ -456,7 +536,7 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
               className="app-input"
               type="date"
               value={bookDate}
-              min={new Date().toISOString().split('T')[0]}
+              min={getTodayDateStr()}
               onChange={e => { setBookDate(e.target.value); setResult(null); }}
               style={{ paddingLeft: 36, fontWeight: 700, color: 'var(--text-primary)' }}
             />
@@ -493,41 +573,57 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
           </div>
 
           <div className="slot-grid">
-            {visibleSlots.map(slot => {
-              const { isBooked, conflict } = getSlotAvailability(slot);
-              const isSelected = !isBooked && Boolean(startTime) && Boolean(endTime) && startTime === slot.start && endTime === slot.end;
-              const bookedBy = conflict?.facultyName || conflict?.coordinator || 'Faculty';
-              return (
-                <button
-                  key={slot.id}
-                  type="button"
-                  onClick={() => {
-                    if (isBooked) {
-                      setConflictModalData({
-                        venueName: selectedVenue?.name || 'Hall',
-                        date: bookDate,
-                        time: `${fmt12(slot.start)} – ${slot.end === '00:00' ? '12:00 AM' : fmt12(slot.end)}`,
-                        bookedBy,
-                        eventName: conflict?.eventName || '',
-                      });
-                      setShowConflictModal(true);
-                      return;
-                    }
-                    setStartTime(slot.start);
-                    setEndTime(slot.end);
-                    setResult(null);
-                  }}
-                  className={`slot-chip ${isSelected ? 'selected' : isBooked ? 'booked' : 'free'}`}
-                >
-                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>
-                    {fmt12(slot.start)} – {slot.end === '00:00' ? '12:00 AM' : fmt12(slot.end)}
-                  </div>
-                  <div style={{ fontSize: 10, opacity: 0.8 }}>
-                    {isBooked ? `👤 ${bookedBy}` : isSelected ? '✓ Selected' : calcDurationStr(slot.start, slot.end)}
-                  </div>
-                </button>
-              );
-            })}
+            {visibleSlots.length === 0 ? (
+              <div style={{
+                gridColumn: '1 / -1',
+                padding: '20px 14px',
+                textAlign: 'center',
+                background: 'var(--surface-subtle)',
+                borderRadius: 'var(--r-md)',
+                border: '1.5px dashed var(--border)',
+                color: 'var(--text-muted)',
+                fontSize: 12,
+                fontWeight: 600,
+              }}>
+                ⏱️ No more time slots available for today. Please select a future date.
+              </div>
+            ) : (
+              visibleSlots.map(slot => {
+                const { isBooked, conflict } = getSlotAvailability(slot);
+                const isSelected = !isBooked && Boolean(startTime) && Boolean(endTime) && startTime === slot.start && endTime === slot.end;
+                const bookedBy = conflict?.facultyName || conflict?.coordinator || 'Faculty';
+                return (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    onClick={() => {
+                      if (isBooked) {
+                        setConflictModalData({
+                          venueName: selectedVenue?.name || 'Hall',
+                          date: bookDate,
+                          time: `${fmt12(slot.start)} – ${slot.end === '00:00' ? '12:00 AM' : fmt12(slot.end)}`,
+                          bookedBy,
+                          eventName: conflict?.eventName || '',
+                        });
+                        setShowConflictModal(true);
+                        return;
+                      }
+                      setStartTime(slot.start);
+                      setEndTime(slot.end);
+                      setResult(null);
+                    }}
+                    className={`slot-chip ${isSelected ? 'selected' : isBooked ? 'booked' : 'free'}`}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 2 }}>
+                      {fmt12(slot.start)} – {slot.end === '00:00' ? '12:00 AM' : fmt12(slot.end)}
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.8 }}>
+                      {isBooked ? `👤 ${bookedBy}` : isSelected ? '✓ Selected' : calcDurationStr(slot.start, slot.end)}
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
 
           {/* ── Slot Pagination Controls ── */}
@@ -614,9 +710,19 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
                   style={{ paddingRight: 32, appearance: 'none', WebkitAppearance: 'none', fontWeight: 700 }}
                 >
                   <option value="" disabled>-- Select Start --</option>
-                  {TIME_SLOTS.filter(t => t !== '00:00').map(t => (
-                    <option key={t} value={t}>{fmt12(t)}</option>
-                  ))}
+                  {TIME_SLOTS
+                    .filter(t => t !== '00:00')
+                    .filter(t => {
+                      if (bookDate === getTodayDateStr()) {
+                        const now = new Date();
+                        const currentMins = now.getHours() * 60 + now.getMinutes();
+                        return timeToMins(t) > currentMins;
+                      }
+                      return true;
+                    })
+                    .map(t => (
+                      <option key={t} value={t}>{fmt12(t)}</option>
+                    ))}
                 </select>
                 <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--primary)' }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -716,11 +822,11 @@ function StepAvailability({ onNext, currentUser, venues = [] }) {
             </div>
 
             <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: '0 0 6px' }}>
-              Slot Available Nahi Hai!
+              Slot Unavailable
             </h3>
 
             <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.5, margin: '0 0 16px' }}>
-              Yeh slot already kisi aur ne book kiya hua hai. Kripya doosra slot ya timing select karein.
+              This time slot is already reserved. Please select another slot or choose custom timings.
             </p>
 
             {conflictModalData && (
@@ -792,7 +898,7 @@ function StepForm({ slotData, onNext, onBack, currentUser: propUser }) {
   const [attendees,   setAttendees]   = useState(75);
   const [eventDesc,   setEventDesc]   = useState('');
   const [email,       setEmail]       = useState(() => activeUser?.email || localStorage.getItem('kirti_faculty_email') || '');
-  const [phone,       setPhone]       = useState(() => activeUser?.mobile || activeUser?.phone || localStorage.getItem('kirti_faculty_phone') || '');
+  const [phone,       setPhone]       = useState(() => sanitizeIndianMobile(activeUser?.mobile || activeUser?.phone || localStorage.getItem('kirti_faculty_phone') || ''));
   const [submitting,  setSubmitting]  = useState(false);
 
   useEffect(() => {
@@ -801,14 +907,14 @@ function StepForm({ slotData, onNext, onBack, currentUser: propUser }) {
       if (u.name) setFacultyName(u.name);
       if (u.departmentName || u.departmentId) setDeptName(u.departmentName || u.departmentId);
       if (u.email) setEmail(u.email);
-      if (u.mobile || u.phone) setPhone(u.mobile || u.phone);
+      if (u.mobile || u.phone) setPhone(sanitizeIndianMobile(u.mobile || u.phone));
     } else {
       const sName = localStorage.getItem('kirti_faculty_name');
       if (sName) setFacultyName(sName);
       const sEmail = localStorage.getItem('kirti_faculty_email');
       if (sEmail) setEmail(sEmail);
       const sPhone = localStorage.getItem('kirti_faculty_phone');
-      if (sPhone) setPhone(sPhone);
+      if (sPhone) setPhone(sanitizeIndianMobile(sPhone));
     }
   }, [propUser]);
 
@@ -816,27 +922,79 @@ function StepForm({ slotData, onNext, onBack, currentUser: propUser }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!eventName.trim() || !facultyName.trim()) {
-      showCustomToast('Required fields', 'Event name and faculty name are required', 'warning');
+
+    if (!eventName.trim()) {
+      showCustomToast('Required Field', 'Please enter the event or program name.', 'warning');
       return;
+    }
+    if (!facultyName.trim()) {
+      showCustomToast('Required Field', 'Please enter faculty coordinator name.', 'warning');
+      return;
+    }
+    if (!deptName.trim()) {
+      showCustomToast('Required Field', 'Please enter department name.', 'warning');
+      return;
+    }
+    if (!classYear.trim()) {
+      showCustomToast('Required Field', 'Please enter class and year.', 'warning');
+      return;
+    }
+    if (!eventDesc.trim()) {
+      showCustomToast('Required Field', 'Please enter a brief description of the event.', 'warning');
+      return;
+    }
+    // 1. Email validation
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      showCustomToast('Email Required', 'Please enter your email address.', 'warning');
+      return;
+    }
+    if (!isValidEmail(trimmedEmail)) {
+      showCustomToast('Invalid Email', 'Please enter a valid email address with domain (e.g. professor@kirti.edu.in or faculty@gmail.com).', 'warning');
+      return;
+    }
+
+    // 2. Phone validation (Strict 10-digit Indian mobile number)
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      showCustomToast('Phone Required', 'Please enter your mobile phone number.', 'warning');
+      return;
+    }
+    if (cleanPhone.length !== 10) {
+      showCustomToast('Invalid Phone', `Mobile number must be exactly 10 digits (currently ${cleanPhone.length} digits).`, 'warning');
+      return;
+    }
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      showCustomToast('Invalid Mobile Number', 'Mobile number must start with 6, 7, 8, or 9.', 'warning');
+      return;
+    }
+
+    const todayStr = getTodayDateStr();
+    if (bookDate === todayStr) {
+      const now = new Date();
+      const currentMins = now.getHours() * 60 + now.getMinutes();
+      if (timeToMins(startTime) <= currentMins) {
+        showCustomToast('Time Passed', 'Selected time slot has already passed for today. Please go back and pick an upcoming time.', 'warning');
+        return;
+      }
     }
     setSubmitting(true);
     try {
       const res = await api.createBooking({
         venueId, bookingDate: bookDate, startTime, endTime,
         eventName: eventName.trim(),
-        departmentName: deptName,
+        departmentName: deptName.trim(),
         facultyName: facultyName.trim(),
         classYear: classYear.trim(),
         eventDescription: eventDesc.trim(),
         attendees: Number(attendees),
         coordinator: facultyName.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
+        email: trimmedEmail,
+        phone: cleanPhone,
       });
       localStorage.setItem('kirti_faculty_name', facultyName.trim());
-      if (email.trim()) localStorage.setItem('kirti_faculty_email', email.trim());
-      if (phone.trim()) localStorage.setItem('kirti_faculty_phone', phone.trim());
+      localStorage.setItem('kirti_faculty_email', trimmedEmail);
+      localStorage.setItem('kirti_faculty_phone', cleanPhone);
       onNext({ ...res, venueName: selectedVenue?.name || res.venueName, departmentName: deptName });
     } catch (err) {
       showCustomToast('Booking Failed', err.message, 'error');
@@ -873,7 +1031,7 @@ function StepForm({ slotData, onNext, onBack, currentUser: propUser }) {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <form onSubmit={handleSubmit} noValidate className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', letterSpacing: 0.5, textTransform: 'uppercase' }}>
           Event Details
         </div>
@@ -891,31 +1049,99 @@ function StepForm({ slotData, onNext, onBack, currentUser: propUser }) {
         </div>
 
         <div>
-          <label className="field-label">Department</label>
-          <input className="app-input" type="text" value={deptName} onChange={e => setDeptName(e.target.value)} />
+          <label className="field-label">Department *</label>
+          <input className="app-input" type="text" required placeholder="e.g. Information Technology"
+            value={deptName} onChange={e => setDeptName(e.target.value)} />
         </div>
 
         <div>
-          <label className="field-label">Class / Year</label>
-          <input className="app-input" type="text" placeholder="e.g. T.Y. IT" value={classYear} onChange={e => setClassYear(e.target.value)} />
+          <label className="field-label">Class / Year *</label>
+          <input className="app-input" type="text" required placeholder="e.g. T.Y. B.Sc. IT"
+            value={classYear} onChange={e => setClassYear(e.target.value)} />
         </div>
 
         <div>
-          <label className="field-label">Brief Description (optional)</label>
-          <textarea className="app-input" placeholder="Describe the event…" rows={3}
+          <label className="field-label">Brief Description *</label>
+          <textarea className="app-input" required placeholder="Describe the event purpose, schedule, and key requirements…" rows={3}
             value={eventDesc} onChange={e => setEventDesc(e.target.value)}
             style={{ resize: 'vertical', lineHeight: 1.5 }} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div>
-            <label className="field-label">Email (optional)</label>
-            <input className="app-input" type="email" placeholder="faculty@college.edu" value={email} onChange={e => setEmail(e.target.value)} />
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <label className="field-label" style={{ margin: 0 }}>Email Address *</label>
+            {email.trim().length > 0 && (
+              <span style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: isValidEmail(email) ? '#059669' : '#DC2626'
+              }}>
+                {isValidEmail(email) ? '✓ Valid format' : 'Invalid email'}
+              </span>
+            )}
           </div>
-          <div>
-            <label className="field-label">Phone (optional)</label>
-            <input className="app-input" type="tel" placeholder="9876543210" value={phone} onChange={e => setPhone(e.target.value)} />
+          <input
+            className="app-input"
+            type="email"
+            required
+            placeholder="faculty@kirti.edu.in"
+            value={email}
+            onChange={e => setEmail(e.target.value.trim())}
+            style={{
+              borderColor: email.trim().length > 0
+                ? (isValidEmail(email) ? 'var(--secondary-border)' : '#FCA5A5')
+                : undefined
+            }}
+          />
+          {email.trim().length > 0 && !isValidEmail(email) && (
+            <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600, marginTop: 4 }}>
+              Please enter a valid email with domain (e.g. name@kirti.edu.in or name@gmail.com)
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <label className="field-label" style={{ margin: 0 }}>Phone / Mobile Number *</label>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: phone.replace(/\D/g, '').length === 10 && /^[6-9]/.test(phone.replace(/\D/g, '')) ? '#059669' : 'var(--text-muted)'
+            }}>
+              {phone.replace(/\D/g, '').length}/10 digits
+            </span>
           </div>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <span style={{
+              position: 'absolute', left: 12, fontSize: 13, fontWeight: 700, color: 'var(--text-muted)',
+              pointerEvents: 'none', userSelect: 'none'
+            }}>
+              +91
+            </span>
+            <input
+              className="app-input"
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              required
+              placeholder="9876543210"
+              value={phone}
+              onChange={e => {
+                setPhone(sanitizeIndianMobile(e.target.value));
+              }}
+              style={{ paddingLeft: 46 }}
+            />
+          </div>
+          {phone.length > 0 && phone.length < 10 && (
+            <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600, marginTop: 4 }}>
+              Enter full 10-digit mobile number ({10 - phone.length} digits left)
+            </div>
+          )}
+          {phone.length === 10 && !/^[6-9]/.test(phone) && (
+            <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600, marginTop: 4 }}>
+              Mobile number must start with 6, 7, 8, or 9
+            </div>
+          )}
         </div>
 
         <button type="submit" className="btn-primary" disabled={submitting}>
@@ -931,154 +1157,139 @@ function StepForm({ slotData, onNext, onBack, currentUser: propUser }) {
 
 /* ── Step 3: Confirmation ── */
 function StepConfirmation({ booking, venues = [], departments = [], onReset }) {
-  const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
-
-  const qrValue = JSON.stringify({
-    bookingId: booking?.id,
-    event: booking?.eventName,
-    venue: booking?.venueName,
-    date: booking?.bookingDate,
-  });
-
-  const handleCopy = () => {
-    if (!booking?.id) return;
-    navigator.clipboard.writeText(booking.id).then(() => {
-      setCopied(true);
-      showCustomToast('Copied!', booking.id, 'success');
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
 
   const handleDownloadPDF = async () => {
     if (!booking) return;
     setDownloading(true);
     try {
       await downloadOfficialReceiptPDF(booking, [], venues, departments);
-      showCustomToast('PDF Downloaded!', `Receipt saved for ${booking.id}`, 'success');
+      showCustomToast('PDF Downloaded!', 'Official receipt saved successfully.', 'success');
     } catch (err) {
       showCustomToast('PDF Error', 'Failed to generate PDF: ' + err.message, 'error');
     } finally { setDownloading(false); }
   };
 
   return (
-    <div className="animate-fade-in">
-      {/* Success hero */}
+    <div className="animate-fade-in" style={{ maxWidth: 460, margin: '0 auto' }}>
+      {/* Unified Compact Confirmation Card — Non-Scrolling */}
       <div style={{
-        background: 'linear-gradient(145deg, #064E3B, #065F46, #047857)',
-        borderRadius: 'var(--r-2xl)', padding: '28px 20px',
-        color: '#FFFFFF', textAlign: 'center', marginBottom: 16,
-        position: 'relative', overflow: 'hidden',
-        boxShadow: '0 12px 36px rgba(6,95,70,0.35)',
+        background: '#FFFFFF',
+        borderRadius: 'var(--r-xl)',
+        border: '1.5px solid var(--border)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+        padding: '20px 18px',
+        marginBottom: 10,
+        textAlign: 'center',
       }}>
-        <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.4) 0%, transparent 70%)', filter: 'blur(20px)' }} />
+        {/* Success Icon */}
         <div style={{
-          width: 68, height: 68, borderRadius: '50%',
-          background: 'rgba(255,255,255,0.18)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 14px',
-          boxShadow: '0 0 0 8px rgba(255,255,255,0.08)',
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          background: '#DCFCE7',
+          color: '#16A34A',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 10px',
         }}>
-          <CheckCircle2 size={36} color="#FFFFFF" />
+          <CheckCircle2 size={28} strokeWidth={2.5} />
         </div>
-        <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 6 }}>Booking Confirmed!</div>
-        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
-          Your hall reservation is successfully recorded.<br />
-          Instant approval — no waiting required.
-        </div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, background: 'rgba(255,255,255,0.15)', padding: '5px 14px', borderRadius: 'var(--r-full)', fontSize: 11, fontWeight: 700 }}>
-          <Star size={11} /> Kirti M. Doongursee College
-        </div>
-      </div>
 
-      {/* PDF Download */}
-      <div style={{
-        background: 'linear-gradient(135deg, #EDE9FE, #E0E7FF)',
-        border: '1.5px solid var(--primary-border)',
-        borderRadius: 'var(--r-xl)', padding: '18px', marginBottom: 14, textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--primary-deeper)', marginBottom: 4 }}>
-          Official Booking Proof
+        <h3 style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 2px' }}>
+          Booking Confirmed!
+        </h3>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 16px' }}>
+          Official hall reservation approved • Kirti College
+        </p>
+
+        {/* Compact Details Box */}
+        <div style={{
+          background: 'var(--surface-subtle)',
+          borderRadius: 12,
+          border: '1px solid var(--border-light)',
+          padding: '12px 14px',
+          textAlign: 'left',
+          marginBottom: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          fontSize: 12,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Event</span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 800, textAlign: 'right', maxWidth: '65%' }} className="truncate">
+              {booking?.eventName || 'College Event'}
+            </span>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border-light)' }} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Venue</span>
+            <span style={{ color: 'var(--primary-deeper)', fontWeight: 800 }}>
+              {booking?.venueName || 'Auditorium'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Date &amp; Time</span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+              {booking?.bookingDate} • {fmt12(booking?.startTime)}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Faculty</span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+              {booking?.facultyName || 'Faculty'}
+            </span>
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 14, lineHeight: 1.5 }}>
-          Download college-stamped receipt with QR code &amp; event details
-        </div>
+
+        {/* Download Button */}
         <button
           className="btn-primary"
           onClick={handleDownloadPDF}
           disabled={downloading}
-          style={{ fontSize: 15, fontWeight: 800 }}
+          style={{
+            width: '100%',
+            height: 42,
+            fontSize: 13,
+            fontWeight: 800,
+            justifyContent: 'center',
+            marginBottom: 8,
+          }}
         >
           {downloading
-            ? <><span className="spinner-primary" style={{ width: 18, height: 18, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} /> Generating PDF…</>
-            : <><FileDown size={18} /> Download PDF Receipt</>
+            ? <><span className="spinner-primary" style={{ width: 16, height: 16, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }} /> Generating PDF…</>
+            : <><FileDown size={16} /> Download Official PDF Receipt</>
           }
         </button>
 
-        {/* Ref ID */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          marginTop: 14, padding: '8px 12px',
-          background: 'rgba(255,255,255,0.7)', borderRadius: 10,
-          border: '1px solid rgba(196,181,253,0.6)',
-        }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Ref ID:</span>
-          <span style={{ fontSize: 12, fontWeight: 900, fontFamily: 'monospace', color: 'var(--primary-deeper)' }}>{booking.id}</span>
-          <button type="button" onClick={handleCopy} style={{
-            background: 'none', border: 'none',
-            color: copied ? '#059669' : 'var(--primary)',
-            fontSize: 11, fontWeight: 800, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 3,
-          }}>
-            {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
-          </button>
-        </div>
+        {/* Make Another Booking */}
+        <button
+          type="button"
+          onClick={onReset}
+          style={{
+            width: '100%',
+            height: 36,
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--primary)',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <Calendar size={13} /> Make Another Booking
+        </button>
       </div>
-
-      {/* Booking details receipt */}
-      <div className="receipt-card" style={{ marginBottom: 14 }}>
-        <div className="receipt-header">
-          <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.7, letterSpacing: 0.8, marginBottom: 4, textTransform: 'uppercase' }}>
-            Reservation Summary
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 900 }}>{booking.eventName}</div>
-        </div>
-        <div className="receipt-body">
-          {[
-            { l: 'Booking ID', v: booking.id, mono: true },
-            { l: 'Venue',      v: booking.venueName || '—' },
-            { l: 'Date',       v: booking.bookingDate },
-            { l: 'Timing',     v: `${fmt12(booking.startTime)} – ${booking.endTime === '00:00' ? '12:00 AM' : fmt12(booking.endTime)}` },
-            { l: 'Faculty',    v: booking.facultyName },
-            { l: 'Department', v: booking.departmentName },
-          ].map(({ l, v, mono }) => (
-            <div key={l} className="receipt-row">
-              <span className="receipt-row-label">{l}</span>
-              <span className="receipt-row-value" style={{ fontFamily: mono ? 'monospace' : 'inherit', fontSize: mono ? 11 : 13 }}>{v}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* QR Pass */}
-      <div className="card" style={{ marginBottom: 14, textAlign: 'center' }}>
-        <div className="field-label" style={{ marginBottom: 12 }}>Digital QR Pass</div>
-        <div style={{
-          display: 'inline-flex', padding: '16px',
-          background: '#FFFFFF', borderRadius: 14,
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-md)',
-        }}>
-          <QRCodeSVG value={qrValue} size={115} level="M" />
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-          Show this QR or PDF receipt to venue attendants for entry
-        </div>
-      </div>
-
-      <button className="btn-secondary" onClick={onReset} style={{ padding: '13px' }}>
-        <Calendar size={14} /> Make Another Booking
-      </button>
     </div>
   );
 }

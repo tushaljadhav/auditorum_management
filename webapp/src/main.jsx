@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { NotificationProvider } from './context/NotificationContext';
 import './index.css';
 
 // Global error handler for dynamic chunk loading errors
@@ -150,7 +151,9 @@ window.__APP_MOUNTED__ = true;
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <NotificationProvider>
+        <App />
+      </NotificationProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );

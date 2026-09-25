@@ -1,27 +1,19 @@
 {
   "name": "auditorium-management",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "College Auditorium Management System built with React and Node.js",
+  "description": "Kirti Auditorium Management System — Unified PWA (Faculty + Admin + Student)",
   "workspaces": [
     "backend",
-    "frontend",
-    "webapp",
-    "admin-app"
+    "webapp"
   ],
   "scripts": {
     "server": "npm run start --workspace=backend",
-    "client": "npm run dev --workspace=frontend",
     "webapp": "npm run dev --workspace=webapp",
-    "admin-app": "npm run dev --workspace=admin-app",
-    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,cyan\" \"npm run server\" \"npm run client\"",
-    "user-admin": "concurrently -n \"SERVER,USER,ADMIN\" -c \"blue,green,magenta\" \"npm run server\" \"npm run webapp\" \"npm run admin-app\"",
-    "dev-all": "concurrently -n \"SERVER,CLIENT,USER,ADMIN\" -c \"blue,cyan,green,magenta\" \"npm run server\" \"npm run client\" \"npm run webapp\" \"npm run admin-app\"",
-    "build:all": "npm run build --workspaces --if-present",
+    "dev": "concurrently -n \"SERVER,APP\" -c \"blue,green\" \"npm run server\" \"npm run webapp\"",
+    "build": "npm run build --workspace=webapp",
     "install-backend": "npm install --workspace=backend",
-    "install-frontend": "npm install --workspace=frontend",
     "install-webapp": "npm install --workspace=webapp",
-    "install-admin-app": "npm install --workspace=admin-app",
     "install-all": "npm install"
   },
   "devDependencies": {

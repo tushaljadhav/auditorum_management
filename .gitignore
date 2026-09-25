@@ -35,3 +35,5 @@ Thumbs.db
 # Large resources and backups
 resources/
 backup_archive/
+_archive_*/
+tailux/

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { api, sessionManager } from '../api/client';
+import React, { useState } from 'react';
+import { api, adminApi, sessionManager } from '../api/client';
 import { showCustomToast } from '../utils/toast';
 import {
   Phone, ArrowRight, Shield, Briefcase,
   LogOut, Calendar, AlertTriangle, UserPlus,
-  CheckCircle2, Home, MapPin, Clock, XCircle,
-  AlertCircle, Check, Info
+  CheckCircle2, Home, MapPin, Clock,
+  AlertCircle, Check, Info, Lock, User
 } from 'lucide-react';
 
 /* ══════════════════════════════════════════════
@@ -159,28 +159,59 @@ function BuildingIllustration() {
 
 /* ══════════════════════════════════════════════ */
 export default function Login({ currentUser, onUserChange, onNavigate }) {
-  const [mobile, setMobile]         = useState('');
-  const [loading, setLoading]       = useState(false);
+  const [loginMode,  setLoginMode]  = useState('faculty'); // 'faculty' | 'admin'
+  const [mobile,     setMobile]     = useState('');
+  const [adminUser,  setAdminUser]  = useState('');
+  const [adminPass,  setAdminPass]  = useState('');
+  const [showPass,   setShowPass]   = useState(false);
+  const [loading,    setLoading]    = useState(false);
   const [errorState, setErrorState] = useState(null);
-  const [mobileFocused, setMobileFocused] = useState(false);
+  const [mobileFocused,   setMobileFocused]   = useState(false);
+  const [adminUserFocused,setAdminUserFocused] = useState(false);
+  const [adminPassFocused,setAdminPassFocused] = useState(false);
 
   const cleanMobile   = mobile.trim();
-  const isAdmin       = cleanMobile.toLowerCase() === 'admin';
   const digitsOnly    = cleanMobile.replace(/[^0-9]/g, '').slice(0, 10);
-  const isValidMobile = isAdmin || /^[6-9]\d{9}$/.test(digitsOnly);
+  const isValidMobile = /^[6-9]\d{9}$/.test(digitsOnly);
+  const isValidAdmin  = adminUser.trim().length >= 3 && adminPass.length >= 4;
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     setErrorState(null);
+
+    // ── Admin Login ──
+    if (loginMode === 'admin') {
+      if (!adminUser.trim() || !adminPass) {
+        setErrorState({ type: 'general', message: 'Please enter username and password.' });
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await adminApi.login(adminUser.trim(), adminPass);
+        if (res.success) {
+          const u = { role: 'admin', id: res.user?.id || 'admin-1', name: res.user?.name || 'Administrator', username: adminUser.trim() };
+          sessionManager.setUser(u);
+          onUserChange?.(u);
+          showCustomToast('Admin access granted! 🛡️', 'success');
+        }
+      } catch (err) {
+        setErrorState({ type: 'general', title: 'Login Failed', message: err.message || 'Invalid username or password.' });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ── Faculty Login ──
     if (!mobile.trim()) {
       setErrorState({ type: 'general', message: 'Please enter your mobile number.' });
       return;
     }
-    if (!isAdmin && digitsOnly.length < 10) {
+    if (digitsOnly.length < 10) {
       setErrorState({ type: 'general', message: `Mobile number must be exactly 10 digits (currently ${digitsOnly.length}).` });
       return;
     }
-    if (!isAdmin && !/^[6-9]/.test(digitsOnly)) {
+    if (!/^[6-9]/.test(digitsOnly)) {
       setErrorState({ type: 'general', message: 'Mobile number must start with 6, 7, 8, or 9.' });
       return;
     }
@@ -191,19 +222,6 @@ export default function Login({ currentUser, onUserChange, onNavigate }) {
 
     setLoading(true);
     try {
-      if (isAdmin) {
-        const res = await api.authLogin('admin', 'admin123');
-        if (res.success) {
-          const u = { role: 'admin', id: res.user?.id || 'admin-1', name: res.user?.name || 'Administrator', username: 'admin' };
-          sessionManager.setUser(u);
-          onUserChange?.(u);
-          showCustomToast('Admin access granted!', 'success');
-          onNavigate?.('home');
-          return;
-        }
-      }
-
-      // Strict backend validation against MySQL faculty table
       const res = await api.facultyLogin(digitsOnly);
       if (res.success && res.user) {
         sessionManager.setUser(res.user);
@@ -401,16 +419,43 @@ export default function Login({ currentUser, onUserChange, onNavigate }) {
           {/* ══ Form Card ══ */}
           <div style={{padding:'28px 24px 0'}}>
 
+            {/* Role Toggle */}
+            <div style={{
+              display:'flex', background:'#F1F5F9', borderRadius:12,
+              padding:4, marginBottom:24, gap:4,
+            }}>
+              {[{id:'faculty',label:'👨‍🏫 Faculty'},{id:'admin',label:'🛡️ Admin'}].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => { setLoginMode(tab.id); setErrorState(null); }}
+                  style={{
+                    flex:1, height:38, borderRadius:9, border:'none',
+                    background: loginMode === tab.id ? '#FFFFFF' : 'transparent',
+                    color: loginMode === tab.id ? '#4F46E5' : '#64748B',
+                    fontWeight: loginMode === tab.id ? 800 : 600,
+                    fontSize:13, cursor:'pointer',
+                    boxShadow: loginMode === tab.id ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                    transition:'all 0.18s ease',
+                    fontFamily:'inherit',
+                  }}
+                >{tab.label}</button>
+              ))}
+            </div>
+
             {/* Welcome heading */}
             <div style={{marginBottom:24}}>
               <div style={{
                 fontSize:26, fontWeight:900, color:'#0F172A',
                 letterSpacing:'-0.6px', lineHeight:1.25, marginBottom:6,
               }}>
-                Welcome Back 👋
+                {loginMode === 'admin' ? 'Admin Login 🛡️' : 'Welcome Back 👋'}
               </div>
               <div style={{fontSize:13, color:'#64748B', fontWeight:500, lineHeight:1.6}}>
-                Log in to your Kirti Audit account to continue.
+                {loginMode === 'admin'
+                  ? 'Sign in with your admin credentials to manage the system.'
+                  : 'Log in to your Kirti Audit account to continue.'
+                }
               </div>
             </div>
 
@@ -478,147 +523,179 @@ export default function Login({ currentUser, onUserChange, onNavigate }) {
 
             <form onSubmit={handleSubmit} style={{display:'flex', flexDirection:'column', gap:14}}>
 
-              {/* Mobile input */}
-              <div>
-                <div style={{
-                  display:'flex', alignItems:'center', gap:12,
-                  background:'#FFFFFF',
-                  border:`1.5px solid ${mobileFocused ? '#4F46E5' : '#E2E8F0'}`,
-                  borderRadius:14, padding:'15px 16px',
-                  boxShadow: mobileFocused
-                    ? '0 0 0 4px rgba(79,70,229,0.1), 0 2px 8px rgba(79,70,229,0.08)'
-                    : '0 2px 6px rgba(15,23,42,0.05)',
-                  transition:'all 0.2s ease',
-                }}>
+              {/* ── ADMIN FORM ── */}
+              {loginMode === 'admin' && (
+                <>
+                  {/* Username */}
                   <div style={{
-                    width:32, height:32, borderRadius:9, flexShrink:0,
-                    background: mobileFocused ? '#EEF2FF' : '#F8FAFC',
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    transition:'background 0.2s',
+                    display:'flex', alignItems:'center', gap:12,
+                    background:'#FFFFFF',
+                    border:`1.5px solid ${adminUserFocused ? '#4F46E5' : '#E2E8F0'}`,
+                    borderRadius:14, padding:'15px 16px',
+                    boxShadow: adminUserFocused ? '0 0 0 4px rgba(79,70,229,0.1)' : '0 2px 6px rgba(15,23,42,0.05)',
+                    transition:'all 0.2s ease',
                   }}>
-                    <Phone size={15} color={mobileFocused ? '#4F46E5' : '#94A3B8'}/>
-                  </div>
-                  <input
-                    type="tel" inputMode="numeric" autoFocus autoComplete="tel"
-                    placeholder="10-digit mobile number"
-                    maxLength={10}
-                    value={mobile}
-                    onFocus={()=>setMobileFocused(true)}
-                    onBlur={()=>setMobileFocused(false)}
-                    onChange={e => {
-                      const val = e.target.value;
-                      if (val.toLowerCase().startsWith('adm')) {
-                        setMobile(val.slice(0, 10));
-                      } else {
-                        setMobile(val.replace(/[^0-9]/g, '').slice(0, 10));
-                      }
-                    }}
-                    style={{
-                      background:'transparent', border:'none', outline:'none',
-                      color:'#0F172A', fontSize:15, fontWeight:600,
-                      width:'100%', fontFamily:'inherit',
-                    }}
-                  />
-                  {!isAdmin && digitsOnly.length > 0 && digitsOnly.length < 10 && (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', flexShrink: 0 }}>
-                      {digitsOnly.length}/10
-                    </span>
-                  )}
-                  {isValidMobile && (
-                    <div style={{
-                      width:22, height:22, borderRadius:'50%',
-                      background:'#ECFDF5', border:'1px solid #BBF7D0',
-                      display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-                    }}>
-                      <CheckCircle2 size={13} color="#10B981"/>
+                    <div style={{ width:32, height:32, borderRadius:9, flexShrink:0, background: adminUserFocused ? '#EEF2FF' : '#F8FAFC', display:'flex', alignItems:'center', justifyContent:'center', transition:'background 0.2s' }}>
+                      <User size={15} color={adminUserFocused ? '#4F46E5' : '#94A3B8'}/>
                     </div>
-                  )}
-                </div>
-                {!isAdmin && digitsOnly.length > 0 && !/^[6-9]/.test(digitsOnly) && (
-                  <div className="app-alert-error">
-                    <AlertCircle size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                    <span>Must start with 6, 7, 8, or 9 (Indian number)</span>
+                    <input
+                      type="text" autoFocus autoComplete="username"
+                      placeholder="Admin username"
+                      value={adminUser}
+                      onFocus={() => setAdminUserFocused(true)}
+                      onBlur={() => setAdminUserFocused(false)}
+                      onChange={e => setAdminUser(e.target.value)}
+                      style={{ background:'transparent', border:'none', outline:'none', color:'#0F172A', fontSize:15, fontWeight:600, width:'100%', fontFamily:'inherit' }}
+                    />
                   </div>
-                )}
-                {!isAdmin && digitsOnly.length > 0 && digitsOnly.length < 10 && /^[6-9]/.test(digitsOnly) && (
-                  <div className="app-alert-info">
-                    <Info size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
-                    <span>Enter full 10 digits ({digitsOnly.length}/10)</span>
-                  </div>
-                )}
-                {!isAdmin && isValidMobile && (
-                  <div className="app-alert-success">
-                    <Check size={12} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                    <span>Valid 10-digit mobile number</span>
-                  </div>
-                )}
-              </div>
 
-
-              {/* Login button */}
-              <button
-                type="submit"
-                disabled={loading || !isValidMobile}
-                style={{
-                  width:'100%', height:54, borderRadius:14, border:'none',
-                  background: isValidMobile
-                    ? 'linear-gradient(100deg, #4F46E5 0%, #6D28D9 100%)'
-                    : '#F1F5F9',
-                  color: isValidMobile ? '#FFFFFF' : '#CBD5E1',
-                  fontSize:16, fontWeight:800,
-                  cursor: isValidMobile ? 'pointer' : 'not-allowed',
-                  display:'flex', alignItems:'center', justifyContent:'center', gap:10,
-                  boxShadow: isValidMobile
-                    ? '0 4px 6px rgba(79,70,229,0.2), 0 12px 28px rgba(79,70,229,0.3)'
-                    : 'none',
-                  transition:'all 0.25s ease',
-                  letterSpacing:'0.2px',
-                  position:'relative', overflow:'hidden',
-                }}
-              >
-                {/* Shimmer overlay */}
-                {isValidMobile && (
+                  {/* Password */}
                   <div style={{
-                    position:'absolute', inset:0,
-                    background:'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%)',
-                    animation:'shimmer 2.5s ease infinite',
-                  }}/>
-                )}
-                <span style={{position:'relative', zIndex:1, display:'flex', alignItems:'center', gap:10}}>
-                  {loading
-                    ? <><span style={{width:18,height:18,border:'2.5px solid rgba(255,255,255,0.3)',borderTopColor:'#FFF',borderRadius:'50%',display:'inline-block',animation:'spin 0.75s linear infinite'}}/> Verifying…</>
-                    : <>Login <ArrowRight size={18} strokeWidth={2.5}/></>
-                  }
-                </span>
-              </button>
+                    display:'flex', alignItems:'center', gap:12,
+                    background:'#FFFFFF',
+                    border:`1.5px solid ${adminPassFocused ? '#4F46E5' : '#E2E8F0'}`,
+                    borderRadius:14, padding:'15px 16px',
+                    boxShadow: adminPassFocused ? '0 0 0 4px rgba(79,70,229,0.1)' : '0 2px 6px rgba(15,23,42,0.05)',
+                    transition:'all 0.2s ease',
+                  }}>
+                    <div style={{ width:32, height:32, borderRadius:9, flexShrink:0, background: adminPassFocused ? '#EEF2FF' : '#F8FAFC', display:'flex', alignItems:'center', justifyContent:'center', transition:'background 0.2s' }}>
+                      <Lock size={15} color={adminPassFocused ? '#4F46E5' : '#94A3B8'}/>
+                    </div>
+                    <input
+                      type={showPass ? 'text' : 'password'} autoComplete="current-password"
+                      placeholder="Password"
+                      value={adminPass}
+                      onFocus={() => setAdminPassFocused(true)}
+                      onBlur={() => setAdminPassFocused(false)}
+                      onChange={e => setAdminPass(e.target.value)}
+                      style={{ background:'transparent', border:'none', outline:'none', color:'#0F172A', fontSize:15, fontWeight:600, width:'100%', fontFamily:'inherit' }}
+                    />
+                    <button type="button" onClick={() => setShowPass(p => !p)} style={{ background:'none', border:'none', cursor:'pointer', padding:0, color:'#94A3B8', flexShrink:0 }}>
+                      <span style={{ fontSize:11, fontWeight:700 }}>{showPass ? 'HIDE' : 'SHOW'}</span>
+                    </button>
+                  </div>
 
-              {/* OR divider */}
-              <div style={{display:'flex',alignItems:'center',gap:12}}>
-                <div style={{flex:1,height:1,background:'#E2E8F0'}}/>
-                <span style={{fontSize:11,color:'#94A3B8',fontWeight:700,letterSpacing:1}}>OR</span>
-                <div style={{flex:1,height:1,background:'#E2E8F0'}}/>
-              </div>
+                  {/* Admin Login button */}
+                  <button
+                    type="submit"
+                    disabled={loading || !isValidAdmin}
+                    style={{
+                      width:'100%', height:54, borderRadius:14, border:'none',
+                      background: isValidAdmin ? 'linear-gradient(100deg, #4F46E5 0%, #6D28D9 100%)' : '#F1F5F9',
+                      color: isValidAdmin ? '#FFFFFF' : '#CBD5E1',
+                      fontSize:16, fontWeight:800,
+                      cursor: isValidAdmin ? 'pointer' : 'not-allowed',
+                      display:'flex', alignItems:'center', justifyContent:'center', gap:10,
+                      boxShadow: isValidAdmin ? '0 4px 6px rgba(79,70,229,0.2), 0 12px 28px rgba(79,70,229,0.3)' : 'none',
+                      transition:'all 0.25s ease',
+                      position:'relative', overflow:'hidden',
+                    }}
+                  >
+                    {isValidAdmin && <div style={{ position:'absolute', inset:0, background:'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%)', animation:'shimmer 2.5s ease infinite' }}/>}
+                    <span style={{ position:'relative', zIndex:1, display:'flex', alignItems:'center', gap:10 }}>
+                      {loading ? <><span style={{ width:18, height:18, border:'2.5px solid rgba(255,255,255,0.3)', borderTopColor:'#FFF', borderRadius:'50%', display:'inline-block', animation:'spin 0.75s linear infinite' }}/> Signing in…</> : <><Shield size={17}/> Sign In as Admin</>}
+                    </span>
+                  </button>
+                </>
+              )}
 
-              {/* Register button */}
-              <button
-                type="button"
-                onClick={()=>onNavigate?.('register')}
-                style={{
-                  width:'100%', height:52, borderRadius:14,
-                  background:'#FFFFFF',
-                  border:'1.5px solid #C7D2FE',
-                  color:'#4F46E5', fontSize:14, fontWeight:700,
-                  cursor:'pointer',
-                  display:'flex', alignItems:'center', justifyContent:'center', gap:9,
-                  fontFamily:'inherit',
-                  boxShadow:'0 2px 8px rgba(79,70,229,0.08)',
-                  transition:'all 0.18s ease',
-                }}
-                onMouseEnter={e=>{e.currentTarget.style.background='#EEF2FF'; e.currentTarget.style.borderColor='#A5B4FC';}}
-                onMouseLeave={e=>{e.currentTarget.style.background='#FFFFFF'; e.currentTarget.style.borderColor='#C7D2FE';}}
-              >
-                <UserPlus size={16} color="#4F46E5"/> Register as New Faculty
-              </button>
+              {/* ── FACULTY FORM ── */}
+              {loginMode === 'faculty' && (
+                <>
+                  {/* Mobile input */}
+                  <div>
+                    <div style={{
+                      display:'flex', alignItems:'center', gap:12,
+                      background:'#FFFFFF',
+                      border:`1.5px solid ${mobileFocused ? '#4F46E5' : '#E2E8F0'}`,
+                      borderRadius:14, padding:'15px 16px',
+                      boxShadow: mobileFocused ? '0 0 0 4px rgba(79,70,229,0.1), 0 2px 8px rgba(79,70,229,0.08)' : '0 2px 6px rgba(15,23,42,0.05)',
+                      transition:'all 0.2s ease',
+                    }}>
+                      <div style={{ width:32, height:32, borderRadius:9, flexShrink:0, background: mobileFocused ? '#EEF2FF' : '#F8FAFC', display:'flex', alignItems:'center', justifyContent:'center', transition:'background 0.2s' }}>
+                        <Phone size={15} color={mobileFocused ? '#4F46E5' : '#94A3B8'}/>
+                      </div>
+                      <input
+                        type="tel" inputMode="numeric" autoFocus autoComplete="tel"
+                        placeholder="10-digit mobile number"
+                        maxLength={10}
+                        value={mobile}
+                        onFocus={() => setMobileFocused(true)}
+                        onBlur={() => setMobileFocused(false)}
+                        onChange={e => setMobile(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+                        style={{ background:'transparent', border:'none', outline:'none', color:'#0F172A', fontSize:15, fontWeight:600, width:'100%', fontFamily:'inherit' }}
+                      />
+                      {digitsOnly.length > 0 && digitsOnly.length < 10 && (
+                        <span style={{ fontSize:11, fontWeight:700, color:'#94A3B8', flexShrink:0 }}>{digitsOnly.length}/10</span>
+                      )}
+                      {isValidMobile && (
+                        <div style={{ width:22, height:22, borderRadius:'50%', background:'#ECFDF5', border:'1px solid #BBF7D0', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                          <CheckCircle2 size={13} color="#10B981"/>
+                        </div>
+                      )}
+                    </div>
+                    {digitsOnly.length > 0 && !/^[6-9]/.test(digitsOnly) && (
+                      <div className="app-alert-error"><AlertCircle size={12} strokeWidth={2.5} style={{ flexShrink:0 }}/><span>Must start with 6, 7, 8, or 9 (Indian number)</span></div>
+                    )}
+                    {digitsOnly.length > 0 && digitsOnly.length < 10 && /^[6-9]/.test(digitsOnly) && (
+                      <div className="app-alert-info"><Info size={12} strokeWidth={2} style={{ flexShrink:0 }}/><span>Enter full 10 digits ({digitsOnly.length}/10)</span></div>
+                    )}
+                    {isValidMobile && (
+                      <div className="app-alert-success"><Check size={12} strokeWidth={2.5} style={{ flexShrink:0 }}/><span>Valid 10-digit mobile number</span></div>
+                    )}
+                  </div>
+
+                  {/* Faculty Login button */}
+                  <button
+                    type="submit"
+                    disabled={loading || !isValidMobile}
+                    style={{
+                      width:'100%', height:54, borderRadius:14, border:'none',
+                      background: isValidMobile ? 'linear-gradient(100deg, #4F46E5 0%, #6D28D9 100%)' : '#F1F5F9',
+                      color: isValidMobile ? '#FFFFFF' : '#CBD5E1',
+                      fontSize:16, fontWeight:800,
+                      cursor: isValidMobile ? 'pointer' : 'not-allowed',
+                      display:'flex', alignItems:'center', justifyContent:'center', gap:10,
+                      boxShadow: isValidMobile ? '0 4px 6px rgba(79,70,229,0.2), 0 12px 28px rgba(79,70,229,0.3)' : 'none',
+                      transition:'all 0.25s ease',
+                      letterSpacing:'0.2px',
+                      position:'relative', overflow:'hidden',
+                    }}
+                  >
+                    {isValidMobile && <div style={{ position:'absolute', inset:0, background:'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%)', animation:'shimmer 2.5s ease infinite' }}/>}
+                    <span style={{ position:'relative', zIndex:1, display:'flex', alignItems:'center', gap:10 }}>
+                      {loading ? <><span style={{ width:18, height:18, border:'2.5px solid rgba(255,255,255,0.3)', borderTopColor:'#FFF', borderRadius:'50%', display:'inline-block', animation:'spin 0.75s linear infinite' }}/> Verifying…</> : <>Login <ArrowRight size={18} strokeWidth={2.5}/></>}
+                    </span>
+                  </button>
+
+                  {/* OR divider */}
+                  <div style={{display:'flex',alignItems:'center',gap:12}}>
+                    <div style={{flex:1,height:1,background:'#E2E8F0'}}/>
+                    <span style={{fontSize:11,color:'#94A3B8',fontWeight:700,letterSpacing:1}}>OR</span>
+                    <div style={{flex:1,height:1,background:'#E2E8F0'}}/>
+                  </div>
+
+                  {/* Register button */}
+                  <button
+                    type="button"
+                    onClick={() => onNavigate?.('register')}
+                    style={{
+                      width:'100%', height:52, borderRadius:14,
+                      background:'#FFFFFF', border:'1.5px solid #C7D2FE',
+                      color:'#4F46E5', fontSize:14, fontWeight:700,
+                      cursor:'pointer',
+                      display:'flex', alignItems:'center', justifyContent:'center', gap:9,
+                      fontFamily:'inherit',
+                      boxShadow:'0 2px 8px rgba(79,70,229,0.08)',
+                      transition:'all 0.18s ease',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background='#EEF2FF'; e.currentTarget.style.borderColor='#A5B4FC'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background='#FFFFFF'; e.currentTarget.style.borderColor='#C7D2FE'; }}
+                  >
+                    <UserPlus size={16} color="#4F46E5"/> Register as New Faculty
+                  </button>
+                </>
+              )}
 
             </form>
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { MapPin, User, Shield, Briefcase, GraduationCap } from 'lucide-react';
+import NotificationBell from './notifications/NotificationBell';
 
 export default function Header({ currentUser, onOpenAuth, onBrandClick }) {
   const roleColor = currentUser?.role === 'admin'
@@ -69,9 +70,12 @@ export default function Header({ currentUser, onOpenAuth, onBrandClick }) {
         </div>
       </div>
 
-      {/* User Role Pill */}
-      <button
-        onClick={onOpenAuth}
+      {/* Right Controls: Notification Bell + User Role Pill */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <NotificationBell />
+
+        <button
+          onClick={onOpenAuth}
         style={{
           display: 'flex', alignItems: 'center', gap: 7,
           padding: '7px 13px',
@@ -124,6 +128,7 @@ export default function Header({ currentUser, onOpenAuth, onBrandClick }) {
           </>
         )}
       </button>
-    </header>
+    </div>
+  </header>
   );
 }

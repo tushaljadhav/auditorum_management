@@ -113,6 +113,26 @@
   --shadow-cyan:    0 8px 22px rgba(6,182,212,0.28);
   --shadow-amber:   0 6px 16px rgba(245,158,11,0.28);
 
+  /* ── Admin-app compatibility aliases ── */
+  /* These map admin-app token names → existing webapp token values */
+  --primary-hover:   #4338CA;
+  --border-light:    #F1F5F9;
+  --radius-sm:       10px;
+  --radius-md:       14px;
+  --radius-lg:       18px;
+  --radius-xl:       22px;
+  --radius-full:     9999px;
+  --shadow-card:     0 2px 8px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+  --shadow-float:    0 10px 25px -5px rgba(15, 23, 42, 0.08);
+  --success:         #10B981;
+  --success-light:   #ECFDF5;
+  --success-border:  #D1FAE5;
+  --success-dark:    #065F46;
+  --warning:         #F59E0B;
+  --warning-light:   #FFFBEB;
+  --warning-border:  #FEF3C7;
+  --warning-dark:    #92400E;
+
   /* Gradients — Tailux-inspired */
   --grad-hero:    linear-gradient(145deg, #0F172A 0%, #1E3A5F 45%, #1D4ED8 100%);
   --grad-violet:  linear-gradient(135deg, #2563EB 0%, #4F46E5 100%);
@@ -876,6 +896,20 @@ body::before {
   opacity: 0.7;
 }
 
+.slot-chip.past {
+  background: #F1F5F9;
+  border-color: #E2E8F0;
+  color: #94A3B8;
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+}
+
+.slot-chip.past:hover {
+  background: #E2E8F0;
+  border-color: #CBD5E1;
+}
+
 .slot-chip.selected {
   background: var(--grad-violet);
   border-color: var(--primary);
@@ -1120,5 +1154,338 @@ body::before {
 .swal2-cancel:hover {
   background: #E2E8F0 !important;
   color: #0F172A !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   ADMIN SHELL — EXACT ORIGINAL ADMIN-APP DESIGN SYSTEM
+   Restores 100% exact layout, colors, variables and aesthetics
+   ═══════════════════════════════════════════════════════ */
+
+/* Dynamic desktop root expansion & styling for Admin mode */
+body.admin-mode {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+body.admin-mode::before {
+  display: none !important; /* Removes blue dot-grid pattern from faculty webapp */
+}
+
+body.admin-mode #root {
+  max-width: 540px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  background-color: #F8FAFC !important;
+  box-shadow: 0 0 50px rgba(15, 23, 42, 0.08) !important;
+  border-left: none !important;
+  border-right: none !important;
+}
+
+/* Override primary to indigo inside admin shell */
+.admin-shell {
+  --primary:        #4F46E5;
+  --primary-hover:  #4338CA;
+  --primary-light:  #EEF2FF;
+  --primary-border: #E0E7FF;
+  --primary-dark:   #3730A3;
+
+  --success:        #10B981;
+  --success-light:  #ECFDF5;
+  --success-border: #D1FAE5;
+  --success-dark:   #065F46;
+
+  --warning:        #F59E0B;
+  --warning-light:  #FFFBEB;
+  --warning-border: #FEF3C7;
+  --warning-dark:   #92400E;
+
+  --danger:         #EF4444;
+  --danger-light:   #FEF2F2;
+  --danger-border:  #FEE2E2;
+  --danger-dark:    #991B1B;
+
+  --bg:             #F8FAFC;
+  --surface:        #FFFFFF;
+  --surface-subtle: #F1F5F9;
+  --border:         #E2E8F0;
+  --border-light:   #F1F5F9;
+
+  --text-primary:   #0F172A;
+  --text-secondary: #475569;
+  --text-muted:     #94A3B8;
+
+  --header-height:  56px;
+  --nav-height:     62px;
+
+  --radius-sm:      10px;
+  --radius-md:      14px;
+  --radius-lg:      18px;
+  --radius-xl:      22px;
+  --radius-full:    9999px;
+
+  --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-card:    0 2px 8px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+  --shadow-float:   0 10px 25px -5px rgba(15, 23, 42, 0.08);
+
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background-color: var(--bg);
+  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Admin-shell button base */
+.admin-shell button {
+  font-family: inherit;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+.admin-shell button:active {
+  transform: scale(0.97);
+}
+
+/* Primary button */
+.admin-shell .btn-primary {
+  background: var(--primary);
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 11px 18px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+}
+.admin-shell .btn-primary:hover { background: var(--primary-hover); }
+
+/* Secondary button */
+.admin-shell .btn-secondary {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.admin-shell .btn-secondary:active { background: var(--surface-subtle); }
+
+/* Admin card */
+.admin-shell .admin-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+/* Badges */
+.admin-shell .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1;
+}
+.admin-shell .badge-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+.admin-shell .badge-success {
+  background: var(--success-light);
+  color: var(--success-dark);
+  border: 1px solid var(--success-border);
+}
+.admin-shell .badge-warning {
+  background: var(--warning-light);
+  color: var(--warning-dark);
+  border: 1px solid var(--warning-border);
+}
+.admin-shell .badge-danger {
+  background: var(--danger-light);
+  color: var(--danger-dark);
+  border: 1px solid var(--danger-border);
+}
+.admin-shell .badge-primary {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border: 1px solid var(--primary-border);
+}
+
+/* Form elements */
+.admin-shell .form-group { margin-bottom: 14px; }
+.admin-shell .form-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.admin-shell .form-input {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border);
+  background: #FFFFFF;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+.admin-shell .form-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Modal */
+.admin-shell .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.18s ease;
+}
+.admin-shell .modal-sheet {
+  width: 100%;
+  max-width: 540px;
+  max-height: 85vh;
+  background: #FFFFFF;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 22px 20px calc(24px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.12);
+  animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Safe bottom padding for admin pages */
+.admin-shell .safe-bottom {
+  padding-bottom: calc(var(--nav-height) + 24px + env(safe-area-inset-bottom));
+}
+
+/* Admin main content area */
+.admin-shell main {
+  flex: 1;
+  overflow-x: hidden;
+  background-color: var(--bg);
+}
+
+/* ═══════════════════════════════════════════════════════
+   PREMIUM NOTIFICATION SYSTEM (BELL, PANEL & TOAST)
+   Responsive desktop popover + mobile adaptive sheet
+   ═══════════════════════════════════════════════════════ */
+
+/* Bell subtle arrival wiggle */
+@keyframes bellWiggle {
+  0%   { transform: rotate(0); }
+  20%  { transform: rotate(14deg); }
+  40%  { transform: rotate(-14deg); }
+  60%  { transform: rotate(8deg); }
+  80%  { transform: rotate(-8deg); }
+  100% { transform: rotate(0); }
+}
+
+/* Unread Badge pop */
+@keyframes badgePop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* Panel slide in */
+@keyframes panelSlideIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Mobile bottom sheet slide in */
+@keyframes panelMobileSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* Toast entrance */
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Desktop positioning for Notification Panel */
+@media (min-width: 640px) {
+  .notification-panel-container {
+    top: 64px;
+    right: max(16px, calc((100vw - 520px) / 2));
+    width: 380px;
+    max-height: 520px;
+  }
+  .notification-backdrop {
+    display: none !important;
+  }
+}
+
+/* Mobile positioning for Notification Panel (Adaptive Bottom Sheet) */
+@media (max-width: 639px) {
+  .notification-panel-container {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-height: 80vh !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-top-left-radius: 22px !important;
+    border-top-right-radius: 22px !important;
+    animation: panelMobileSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  .mobile-drag-handle {
+    display: flex !important;
+  }
+  .notification-backdrop {
+    display: block !important;
+  }
+}
+
+/* Toast Container Stack */
+@media (min-width: 640px) {
+  .kirti-toast-container-stack {
+    top: 24px;
+    right: 24px;
+    width: 360px;
+    align-items: flex-end;
+  }
+}
+
+@media (max-width: 639px) {
+  .kirti-toast-container-stack {
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    align-items: center;
+  }
 }
 

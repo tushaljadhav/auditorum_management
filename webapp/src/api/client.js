@@ -67,6 +67,7 @@ async function fetchJSON(url, options = {}) {
 
   try {
     const response = await fetch(`${BASE_URL}${url}`, {
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json', ...options.headers },
       signal: controller.signal,
       ...options,
@@ -244,18 +245,118 @@ export const api = {
   getSession: () => fetchJSON('/auth/session'),
 };
 
-// ── Client Session Manager ──
+// ── Admin API (for Admin pages — same backend, dedicated namespace) ──
+export const adminApi = {
+  login: (username, password) =>
+    fetchJSON('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+
+  logout: () =>
+    fetchJSON('/auth/logout', { method: 'POST' }),
+
+  checkSession: () =>
+    fetchJSON('/auth/session'),
+
+  getStats: () =>
+    fetchJSON('/admin/stats'),
+
+  getVenues: () =>
+    fetchJSON('/venues'),
+
+  addVenue: (payload) =>
+    fetchJSON('/venues', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateVenue: (id, payload) =>
+    fetchJSON(`/venues/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  deleteVenue: (id) =>
+    fetchJSON(`/venues/${id}`, { method: 'DELETE' }),
+
+  setVenueMaintenance: (venue, isMaintenance, reason = '') =>
+    fetchJSON(`/venues/${venue.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ...venue,
+        status: isMaintenance ? 'Maintenance' : 'Active',
+        maintenanceReason: isMaintenance ? reason : '',
+      }),
+    }),
+
+  getBookings: () =>
+    fetchJSON('/bookings'),
+
+  overrideBooking: (bookingId, payload) =>
+    fetchJSON(`/bookings/${bookingId}/override`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  cancelBooking: (bookingId, reason = 'Cancelled by Admin') =>
+    fetchJSON(`/bookings/${bookingId}/override`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'cancel', reason }),
+    }),
+
+  deleteBooking: (id) =>
+    fetchJSON(`/bookings/${id}`, { method: 'DELETE' }),
+
+  getAttendance: (bookingId) =>
+    fetchJSON(`/bookings/${bookingId}/attendance`),
+
+  getUsers: () =>
+    fetchJSON('/admin/users'),
+
+  addUser: (payload) =>
+    fetchJSON('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateUser: (id, payload) =>
+    fetchJSON(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  deleteUser: (id) =>
+    fetchJSON(`/admin/users/${id}`, { method: 'DELETE' }),
+
+  getFaculty: () =>
+    fetchJSON('/faculty'),
+
+  updateFacultyStatus: (id, status) =>
+    fetchJSON(`/faculty/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+
+  deleteFaculty: (id) =>
+    fetchJSON(`/faculty/${id}`, { method: 'DELETE' }),
+
+  getDepartments: () => fetchJSON('/departments'),
+
+  getDesignations: () => fetchJSON('/designations'),
+
+  getBackupDownloadUrl: () => '/api/admin/backup',
+
+  restoreBackup: (jsonData) =>
+    fetchJSON('/admin/restore', { method: 'POST', body: JSON.stringify({ data: jsonData }) }),
+};
+
+// ── Unified Session Manager ──
+// Checks both faculty session (kirti_pwa_user) and admin session (kirti_admin_session)
 export const sessionManager = {
+  FACULTY_KEY: 'kirti_pwa_user',
+  ADMIN_KEY: 'kirti_admin_session',
+
   getUser: () => {
     try {
-      const saved = localStorage.getItem('kirti_pwa_user');
-      return saved ? JSON.parse(saved) : null;
+      // Check faculty session first
+      const faculty = localStorage.getItem('kirti_pwa_user');
+      if (faculty) return JSON.parse(faculty);
+      // Check admin session
+      const admin = localStorage.getItem('kirti_admin_session');
+      if (admin) return JSON.parse(admin);
+      return null;
     } catch { return null; }
   },
 
   setUser: (user) => {
     if (!user) {
       localStorage.removeItem('kirti_pwa_user');
+      localStorage.removeItem('kirti_admin_session');
+    } else if (user.role === 'admin') {
+      localStorage.setItem('kirti_admin_session', JSON.stringify(user));
     } else {
       localStorage.setItem('kirti_pwa_user', JSON.stringify(user));
     }
@@ -263,16 +364,14 @@ export const sessionManager = {
 
   logout: () => {
     localStorage.removeItem('kirti_pwa_user');
+    localStorage.removeItem('kirti_admin_session');
   },
 };
 
 // ── Shareable Attendance URL Builder ──
-// Faculty creates session on webapp → generates URL for students to open on main website
+// Faculty creates session on webapp → generates URL for students to open directly in webapp
 export const buildAttendanceUrl = (bookingId) => {
-  const { protocol, hostname } = window.location;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//${hostname}:3000/attendance?bookingId=${bookingId}`;
-  }
-  const portalBase = import.meta.env.VITE_PORTAL_URL || 'https://kirti-auditorium.vercel.app';
-  return `${portalBase}/attendance?bookingId=${bookingId}`;
+  const { protocol, host } = window.location;
+  return `${protocol}//${host}/?tab=attendance&session=${bookingId}`;
 };
+

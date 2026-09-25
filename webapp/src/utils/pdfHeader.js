@@ -436,7 +436,6 @@ export async function renderOfficialReceiptCanvas(booking, faculties = [], venue
 
   const rows = [
     { icon: 'user', label: 'Faculty / Coordinator', value: facultyName },
-    { icon: 'bookmark', label: 'Booking Reference ID', value: booking?.id || 'N/A', isRefId: true },
     { icon: 'file', label: 'Event / Program Name', value: booking?.eventName || 'N/A' },
     { icon: 'pin', label: 'Venue (Hall / Room)', value: venueName },
     { icon: 'calendar', label: 'Booking Date', value: booking?.bookingDate || 'N/A' },
@@ -622,7 +621,9 @@ export async function downloadOfficialReceiptPDF(booking, faculties = [], venues
 
   // Fit exact A4 canvas onto PDF page (210mm x 297mm)
   doc.addImage(canvasDataUrl, 'PNG', 0, 0, 210, 297);
-  doc.save(`Receipt_${booking.id}.pdf`);
+  const cleanEvent = (booking.eventName || 'Event').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30);
+  const dateStr = booking.bookingDate || 'Receipt';
+  doc.save(`Receipt_${cleanEvent}_${dateStr}.pdf`);
 }
 
 /**
